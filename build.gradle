@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.0'
+    id 'application'
+    id 'antlr'
+    //id 'scala'
+}
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.jetbrains.kotlin:kotlin-test'
+    implementation 'com.google.code.gson:gson:2.8.9'
+    implementation 'org.jetbrains.kotlin:kotlin-compiler:1.9.0'
+    implementation 'org.antlr:antlr4-runtime:4.13.2'
+    //implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable"
+    //implementation 'org.scala-lang:scala3-library_3:3.2.2'
+}
+
+test {
+    useJUnitPlatform()
+}
+kotlin {
+    jvmToolchain(17)
+}
