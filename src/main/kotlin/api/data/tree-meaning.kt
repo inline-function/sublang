@@ -1,136 +1,182 @@
-@file:Suppress("unused")
-
 package api.data
 
-import api.data.ExpressionTree.NameTree
-import api.data.TopTree.DataTree
-import api.data.TopTree.StructTree
-import api.data.TypeTree.CommonTypeTree.BasicTypeTree.ANY
+import api.data.ExprTree.*
+import api.data.TopTree.CallableTree.VariableTree
+import api.tools.Either
+import api.tools.Optional
+import api.tools.some
+
 sealed interface Tree
-sealed interface InnerTree : Tree {
-    val line: Int
-    val row: Int
-    val moduleName: String
-    val projectName: String
-    data class LRMP(
-        override val line: Int,
-        override val row: Int,
-        override val moduleName: String,
-        override val projectName: String
-    ) : InnerTree
-    companion object {
-        operator fun invoke(line: Int, row: Int, moduleName: String, projectName: String): InnerTree = LRMP(line, row, moduleName, projectName)
-    }
+sealed interface InnerTree : Tree{
+    val line : Int
+    val row : Int
+    val module : String
 }
+data class CheckedInfo(
+    val line : Int,
+    val row : Int,
+    val module : String
+)
+sealed interface ITree : InnerTree{
+    val info : CheckedInfo
+    override val line : Int
+        get() = info.line
+    override val row : Int
+        get() = info.line
+    override val module : String
+        get() = info.module
+}
+val InnerNode.information get() = CheckedInfo(line,row,fileName)
 data class ProjectTree(
-    val name: String,
-    val module: List<ModuleTree>
+    val name: ID,
+    val children: List<ModuleTree>
 ) : Tree
 data class ModuleTree(
-    val name: String,
+    val name: ID,
     val children: List<TopTree>
 ) : Tree
-sealed interface TypeTree : InnerTree {
-    sealed interface CommonTypeTree : TypeTree {
-        data class StructTypeTree(
-            val tree: InnerTree,
-            val struct: StructTree
-        ) : CommonTypeTree, InnerTree by tree
-        enum class BasicTypeTree : CommonTypeTree {
-            STR,INT,DEC,BOOL,UNIT,NOTHING,ANY;
-            override val line : Int = 1
-            override val row : Int = 1
-            override val moduleName : String = "sub_core"
-            override val projectName : String = "Sublimation"
+sealed interface StmtTree : ITree
+sealed interface TopTree : StmtTree{
+    val annotations : List<AnnTree>
+    val name : ID
+    //TODO没有泛型是因为这个是一个预览版特性
+    sealed interface CallableTree : TopTree{
+        val receiver : Optional<TypeTree?>
+        val type : Optional<TypeTree>
+        data class FunctionTree(
+            override val info : CheckedInfo,
+            override val name : ID,
+            val body : Optional<Lazy<Block>>,
+            override val type : Optional<TypeTree>,
+            override val receiver : Optional<TypeTree?>,
+            val params : List<Optional<VariableTree>>,
+            override val annotations : List<AnnTree>
+        ) : CallableTree
+        data class VariableTree(
+            override val info : CheckedInfo,
+            override val receiver : Optional<TypeTree?>,
+            override val type : Optional<TypeTree>,
+            override val name : ID,
+            val kind : VariableTreeType,
+            val value : Optional<ExprTree>,
+            override val annotations : List<AnnTree>
+        ) : CallableTree{
+            enum class VariableTreeType{
+                VARIABLE,VALUE,CONSTANT
+            }
         }
     }
-    data class NullableTypeTree<T : TypeTree>(
-        val tree : InnerTree,
-        val trueType : T
-    ) : TypeTree, InnerTree by tree
-    data class FailableTypeTree<T : TypeTree>(
-        val tree : InnerTree,
-        val trueType : T
-    ) : TypeTree, InnerTree by tree
-    data class GenericTypeTree(
-        val innerTree: InnerTree,
-        val generic: String
-    ) : TypeTree, InnerTree by innerTree
-    data class FunctionTypeTree(
-        val innerTree: InnerTree,
-        val param: List<TypeTree>,
-        val returnType: TypeTree
-    ) : TypeTree, InnerTree by innerTree
-    data class TupleTypeTree(
-        val innerTree: InnerTree,
-        val elementType: List<TypeTree>
-    ) : TypeTree, InnerTree by innerTree
+    data class TraitTree(
+        override val info : CheckedInfo,
+        override val name : ID,
+        val members : List<CallableTree>,
+        override val annotations : List<AnnTree>
+    ) : TopTree
 }
-
-sealed interface TopTree : InnerTree {
-    val name: String
-    val annotations: List<AnnotationTree<Any>>
-    data class DataTree(
-        val tree: InnerTree,
-        override val name: String,
-        val type: TypeTree,
-        val value: ExpressionTree,
-        override val annotations: List<AnnotationTree<Any>> = listOf()
-    ) : TopTree,StmtTree,DataOrAssign,InnerTree by tree
-    data class StructTree(
-        val tree: InnerTree,
-        override val name: String,
-        val data: List<DataTree>,
-        val generic: List<TypeTree> = listOf(),
-        override val annotations: List<AnnotationTree<Any>> = listOf()
-    ) : TopTree, InnerTree by tree
-}
-data class AnnotationTree<T : Any>(
-    val tree: InnerTree,
-    val struct: StructTree,
-    val value: T?
-) : InnerTree by tree
-sealed interface ExpressionTree : InnerTree {
-    val type: TypeTree
-    sealed interface FaceTree : ExpressionTree{
-        data class FaceValueTree<T>(
-            val tree: InnerTree,
-            val value: T,
-            override val type: TypeTree
-        ) : FaceTree, InnerTree by tree
-        data class NullValueTree(
-            val tree: InnerTree,
-            override val type: TypeTree = ANY
-        ) : FaceTree, InnerTree by tree
-    }
+@JvmInline value class Block(private val stmts : List<StmtTree>) : List<StmtTree> by stmts,Tree
+val List<StmtTree>.block get() = Block(this)
+fun blocking(vararg stmts : StmtTree) = Block(stmts.toList())
+@JvmInline value class ID(val text : String) : Comparable<String> by text, CharSequence by text,Tree
+val String.id : ID get() = ID(this)
+data class AnnTree(
+    override val info : CheckedInfo,
+    val name : NameTree,
+    val value : Either<FaceValueTree<Any>,NameTree>?
+) : ITree
+sealed interface ExprTree : StmtTree{
+    val type : Optional<TypeTree>
     data class NameTree(
-        val tree : InnerTree,
-        val name : List<String>,
-        override val type : TypeTree
-    ) : ExpressionTree, InnerTree by tree
-    data class LambdaTree(
-        val tree : InnerTree,
-        val param : List<DataTree>,
-        val body : List<StmtTree>,
-        override val type : TypeTree
-    ) : ExpressionTree, InnerTree by tree
-}
-val NameTree.text : String get() =
-    if(name.isNotEmpty())name.drop(1)
-    .fold(name.first()){acc,it-> "$acc.$it" } else ""
-sealed interface StmtTree : InnerTree{
-    data class AssignTree(
-        val tree : InnerTree,
-        val name : NameTree,
-        val value : ExpressionTree
-    ) : StmtTree,DataOrAssign,InnerTree by tree
-}
-sealed interface DataOrAssign : StmtTree
-sealed interface SETree : ExpressionTree,StmtTree{
+        override val info : CheckedInfo,
+        val china : List<String>,
+        override val type : Optional<TypeTree>
+    ) : ExprTree,List<String> by china
     data class InvokeTree(
-        val tree : InnerTree,
-        override val type : TypeTree,
-        val name : NameTree,
-        val args : List<ExpressionTree>
-    ) : SETree,InnerTree by tree
+        override val info : CheckedInfo,
+        val invoker : Optional<ExprTree>,
+        val args : Map<ID,ExprTree>,
+        val generic : Map<ID,TypeTree>,
+        val outsideLambda : LambdaTree?,
+        override val type : Optional<TypeTree>
+    ) : ExprTree
+    data class LambdaTree(
+        override val info : CheckedInfo,
+        val params : List<VariableTree>,
+        val body : Block,
+        override val type : Optional<TypeTree>
+    ) : ExprTree
+    sealed class FaceValueTree<out T>(
+        private val typeName : String
+    ) : ExprTree{
+        abstract val value : T
+        override val type : Optional<TypeTree> get() = TypeTree(
+            info = info,
+            name = typeName,
+            generic = mapOf()
+        ).some
+        data class DecValueTree(
+            override val info : CheckedInfo,
+            override val value : Double
+        ) : FaceValueTree<Double>("小数")
+        data class BoolValueTree(
+            override val info : CheckedInfo,
+            override val value : Boolean
+        ) : FaceValueTree<Boolean>("逻辑")
+        data class IntValueTree(
+            override val info : CheckedInfo,
+            override val value : Int
+        ) : FaceValueTree<Int>("整数")
+        data class StrValueTree(
+            override val info : CheckedInfo,
+            override val value : String
+        ) : FaceValueTree<String>("文本")
+        data class UnitValueTree(
+            override val info : CheckedInfo,
+            override val value : Unit = Unit
+        ) : FaceValueTree<Unit>("空")
+        data class NullValueTree(
+            override val info : CheckedInfo,
+            override val value : Nothing? = null
+        ) : FaceValueTree<Nothing?>("真空")
+    }
+    data class IfTree(
+        override val info : CheckedInfo,
+        val condition : Optional<ExprTree>,
+        val then : Block,
+        val `else` : Block?,
+        override val type : Optional<TypeTree>
+    ) : ExprTree
+    data class WhenTree(
+        override val info : CheckedInfo,
+        override val type : Optional<TypeTree>,
+        val value : Optional<ExprTree>,
+        val cases : List<CaseTree>
+    ) : ExprTree{
+        sealed interface CaseTree : ITree{
+            data class AtCaseTree(
+                override val info : CheckedInfo,
+                val condition : Optional<ExprTree>,
+                val block : Block
+            ) : CaseTree
+            data class ValueCaseTree(
+                override val info : CheckedInfo,
+                val value : List<ExprTree>,
+                val block : Block
+            ) : CaseTree
+            data class TypeCaseTree(
+                override val info : CheckedInfo,
+                val matcher : TypeTree,
+                val block : Block
+            ) : CaseTree
+            data class ElseCaseTree(
+                override val info : CheckedInfo,
+                val block : Block
+            ) : CaseTree
+        }
+    }
 }
+//类型并不是一等公民,而是等效替换成包含着类型信息的凝华类型对象常量名
+data class TypeTree(
+    override val info : CheckedInfo,
+    val name : String,
+    val generic : Map<ID,TypeTree>
+) : ITree

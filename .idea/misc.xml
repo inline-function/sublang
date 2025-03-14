@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ANTLRGenerationPreferences">
+    <option name="perGrammarGenerationSettings">
+      <list>
+        <PerGrammarGenerationSettings>
+          <option name="fileName" value="$PROJECT_DIR$/docs/sublimation.g4" />
+          <option name="autoGen" value="true" />
+          <option name="outputDir" value="F:\JavaProject\SublimationLang\src\main\java\close\antlr" />
+          <option name="libDir" value="" />
+          <option name="encoding" value="UTF-8" />
+          <option name="pkg" value="" />
+          <option name="language" value="Java" />
+          <option name="generateVisitor" value="true" />
+        </PerGrammarGenerationSettings>
+        <PerGrammarGenerationSettings>
+          <option name="fileName" value="$PROJECT_DIR$/docs/Sublimation.g4" />
+          <option name="autoGen" value="true" />
+          <option name="outputDir" value="F:\JavaProject\SublimationLang\src\main\java" />
+          <option name="libDir" value="" />
+          <option name="encoding" value="UTF-8" />
+          <option name="pkg" value="api.antlr" />
+          <option name="language" value="Java" />
+          <option name="generateVisitor" value="true" />
+        </PerGrammarGenerationSettings>
+        <PerGrammarGenerationSettings>
+          <option name="fileName" value="$PROJECT_DIR$/cao_gao/Sub.g4" />
+          <option name="autoGen" value="true" />
+          <option name="outputDir" value="F:\JavaProject\SublimationLang\src\main\java" />
+          <option name="libDir" value="" />
+          <option name="encoding" value="UTF-8" />
+          <option name="pkg" value="api.antlr" />
+          <option name="language" value="Java" />
+          <option name="generateVisitor" value="true" />
+        </PerGrammarGenerationSettings>
+        <PerGrammarGenerationSettings>
+          <option name="fileName" value="$PROJECT_DIR$/cao2gao3/Sub.g4" />
+          <option name="autoGen" value="true" />
+          <option name="outputDir" value="F:\JavaProject\SublimationLang\src\main\java" />
+          <option name="libDir" value="" />
+          <option name="encoding" value="UTF-8" />
+          <option name="pkg" value="api.antlr" />
+          <option name="language" value="Java" />
+          <option name="generateVisitor" value="true" />
+        </PerGrammarGenerationSettings>
+      </list>
+    </option>
+  </component>
+  <component name="ExternalStorageConfigurationManager" enabled="true" />
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_17" default="true" project-jdk-name="17" project-jdk-type="JavaSDK">
+    <output url="file://$PROJECT_DIR$/out" />
+  </component>
+</project>

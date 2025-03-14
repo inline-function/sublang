@@ -1,6 +1,7 @@
 plugins {
     id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.9.0'
+    id 'org.jetbrains.kotlin.jvm' version '2.1.0'
+//    id 'com.google.devtools.ksp' version '2.1.0-1.0.29'
     id 'application'
     id 'antlr'
     //id 'scala'
@@ -14,9 +15,14 @@ repositories {
 
 dependencies {
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
-    implementation 'com.google.code.gson:gson:2.8.9'
+//    implementation 'com.google.code.gson:gson:2.8.9'
     implementation 'org.jetbrains.kotlin:kotlin-compiler:1.9.0'
     implementation 'org.antlr:antlr4-runtime:4.13.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4'
+//    implementation 'io.arrow-kt:arrow-optics:2.0.1'
+//    implementation 'io.arrow-kt:arrow-fx-coroutines:2.0.1'
+//    implementation 'io.arrow-kt:arrow-core:2.0.1'
+//    ksp 'io.arrow-kt:arrow-optics-ksp-plugin:2.0.1'
     //implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable"
     //implementation 'org.scala-lang:scala3-library_3:3.2.2'
 }

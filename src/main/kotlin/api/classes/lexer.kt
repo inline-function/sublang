@@ -1,5 +1,6 @@
 package api.classes
 
+import api.classes.Lexer.Stater
 import api.tools.*
 import api.data.*
 import api.data.TokenType.*
@@ -116,7 +117,7 @@ class Lexer(
 
     /**
      * 报错
-     * Error reporting
+     * None reporting
      * @throws Exception 抛出异常
      * @throws Exception Throws exception
      */
@@ -160,140 +161,162 @@ class Lexer(
             }
         }
     }
-
     /**
      * 开始分析
      * Start analysis
      * @return 标记列表
      * @return List of tokens
      */
-    val Boolean.tokens: List<Token> get() {
-        val tokens = mutableListOf<Token>()  // 已获取的标记
-        var index = 0   // 当前字符索引
-        var str = ""    // 累加文本
-        line = 1   // 行
-        row = 0    // 列
-        var now: Char? = deal { text[index] } with { null }  // 当前字符
-        // 跳过空白
-        lateinit var nextOfWs: () -> Unit
-        nextOfWs = {
-            index++
-            now = deal { text[index] } with { null }
-            row++
-            if (now == '\n') {
-                line++
-                row = 1
-            }
-            ws(now ?: '1') then {
-                nextOfWs()
-            }
-        }
-        // 开始函数
-        var f = functions[0]!!
-        // 上一个状态函数
-        var justNow = 0
-        // 下一个函数
-        val next = {
-            index++
-            now = deal { text[index] } with { null }
-            row++
-            if (now == '\n') {
-                line++
-                row = 1
-            }
-            now notNull {
-                str += text[index - 1]
-            }
-            ws(now ?: '$') then {
-                if (str.isNotEmpty()) {
-                    if (str.length == 1 && ws(str[0])) {
-                        str = ""
-                    } else {
-                        this then {
-                            "遭遇符合空白状态函数跳转条件的字符,表明当前标记结束".print("词法分析日志")
-                        }
-                        val stater = Stater(' ', str, "($line,$row)")
-                        stater.f()
-                        stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
-                        this then { "填入标记->$str<${stater.end!!()}>($line,$row)".print("词法分析日志") }
-                        tokens.add(Token(line, row, stater.end!!(), str))
-                        str = ""
-                    }
+    val Boolean.tokens : List<Token>
+        get() {
+            val tokens = mutableListOf<Token>()  // 已获取的标记
+            var index = 0   // 当前字符索引
+            var str = ""    // 累加文本
+            line = 1   // 行
+            row = 0    // 列
+            var now : Char? = try {
+                text[index]
+            } catch (_ : Throwable) {
+                null
+            }  // 当前字符
+            // 跳过空白
+            lateinit var nextOfWs : ()->Unit
+            nextOfWs = {
+                index++
+                now = try {
+                    text[index]
+                } catch (_ : Throwable) {
+                    null
                 }
-                nextOfWs()
-            }
-        }
-        while (index < text.length) {
-            this then { "$str ; $now ($index:$line,$row)".print("词法分析日志") }
-            // 状态器
-            val stater = Stater(now ?: ' ', str, "($line,$row)")
-            // 初始化状态器
-            stater.f()
-            // 如果字符是空就调用结束函数
-            if (now == null) {
-                this then {
-                    "在文件末尾,表明当前标记结束".print("词法分析日志")
+                row++
+                if (now == '\n') {
+                    line++
+                    row = 1
                 }
-                stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
-                this then { "填入标记->$str<${stater.end!!()}>($line,$row)".print("词法分析日志") }
-                tokens.add(Token(line, row, stater.end!!(), str))
-                str = ""
-                f = functions[0]!!
-                justNow = 0
-            } else {
-                // 跳转函数
-                var e: (() -> Unit)? = {
+                if (ws(now ?: '1')) {
+                    nextOfWs()
+                }
+            }
+            // 开始函数
+            var f = functions[0]!!
+            // 上一个状态函数
+            var justNow = 0
+            // 下一个函数
+            val next = {
+                index++
+                now = try {
+                    text[index]
+                } catch (_ : Throwable) {
+                    null
+                }
+                row++
+                if (now == '\n') {
+                    line++
+                    row = 1
+                }
+                now?.apply<Any> {
+                    str += text[index - 1]
+                }
+                if (ws(now ?: '$')) {
                     if (str.isNotEmpty()) {
-                        this then {
-                            "对于状态'$justNow'的所有跳转条件均不匹配,表明当前标记结束".print("词法分析日志")
+                        if (str.length == 1 && ws(str[0])) {
+                            str = ""
+                        } else {
+                            if (this) {
+                                "遭遇符合空白状态函数跳转条件的字符,表明当前标记结束".print("词法分析日志")
+                            }
+                            val stater = Stater(' ',str,"($line,$row)")
+                            stater.f()
+                            stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
+                            if (this) {
+                                "填入标记->$str<${stater.end!!()}>($line,$row)".print("词法分析日志")
+                            }
+                            tokens.add(Token(line,row,stater.end!!(),str))
+                            str = ""
                         }
-                        stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
-                        this then { "填入标记->$str<${stater.end!!()}>($line,$row)".print("词法分析日志") }
-                        tokens.add(Token(line, row, stater.end!!(), str))
-                        str = ""
                     }
+                    nextOfWs()
+                }
+            }
+            while (index < text.length) {
+                if (this) {
+                    "$str ; $now ($index:$line,$row)".print("词法分析日志")
+                }
+                // 状态器
+                val stater = Stater(now ?: ' ',str,"($line,$row)")
+                // 初始化状态器
+                stater.f()
+                // 如果字符是空就调用结束函数
+                if (now == null) {
+                    if (this) {
+                        "在文件末尾,表明当前标记结束".print("词法分析日志")
+                    }
+                    stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
+                    if (this) {
+                        "填入标记->$str<${stater.end!!()}>($line,$row)".print("词法分析日志")
+                    }
+                    tokens.add(Token(line,row,stater.end!!(),str))
+                    str = ""
                     f = functions[0]!!
                     justNow = 0
-                }
-                // 不是空就查找哪个条件是真
-                stater.m.keys.forEach {
-                    if (e != null) {
-                        // 真则赋值下个状态函数为条件对应的状态函数
-                        it() then {
-                            this@tokens then {
-                                "从状态'${justNow}'跳转至'${stater.m[it]!!}'".print("词法分析日志")
+                } else {
+                    // 跳转函数
+                    var e : (()->Unit)? = {
+                        if (str.isNotEmpty()) {
+                            if (this) {
+                                "对于状态'$justNow'的所有跳转条件均不匹配,表明当前标记结束".print("词法分析日志")
                             }
-                            !functions.containsKey(stater.m[it]!!) then {
-                                throw Exception("词法分析错误:${"状态函数'${justNow}'的下一个跳转状态'${stater.m[it]!!}'未定义[$line,$row]${stater.lines[it]}"}")
+                            stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
+                            if (this) {
+                                "填入标记->$str<${stater.end!!()}>($line,$row)".print("词法分析日志")
                             }
-                            justNow = stater.m[it]!!
-                            f = functions[stater.m[it]!!]!!
-                            next()
-                            e = null
+                            tokens.add(Token(line,row,stater.end!!(),str))
+                            str = ""
+                        }
+                        f = functions[0]!!
+                        justNow = 0
+                    }
+                    // 不是空就查找哪个条件是真
+                    stater.m.keys.forEach {
+                        if (e != null) {
+                            // 真则赋值下个状态函数为条件对应的状态函数
+                            if (it()) {
+                                if (this@tokens) {
+                                    "从状态'${justNow}'跳转至'${stater.m[it]!!}'".print("词法分析日志")
+                                }
+                                if (!functions.containsKey(stater.m[it]!!)) {
+                                    throw Exception("词法分析错误:${"状态函数'${justNow}'的下一个跳转状态'${stater.m[it]!!}'未定义[$line,$row]${stater.lines[it]}"}")
+                                }
+                                justNow = stater.m[it]!!
+                                f = functions[stater.m[it]!!]!!
+                                next()
+                                e = null
+                            }
                         }
                     }
+                    // 都不匹配则使用end函数
+                    e?.invoke()
                 }
-                // 都不匹配则使用end函数
-                e?.invoke()
             }
-        }
-        this@tokens then {
-            "分析临近尾声,结束状态'$justNow'为最后一个标记".print("词法分析日志")
-        }
-        val stater = Stater(' ', str, "($line,$row)")
-        stater.f()
-        stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
-        if (str.isEmpty() || ws(str[0])) {
-            this@tokens then {
-                "但是本词法分析器发现最后一个标记是空的,因此帮你丢了,快说:'谢谢词法分析器'(～￣▽￣)～".print("词法分析日志")
+            if (this@tokens) {
+                "分析临近尾声,结束状态'$justNow'为最后一个标记".print("词法分析日志")
             }
-        } else {
-            this@tokens then { "填入标记->${str + text.last()}<${stater.end!!()}>($line,$row)".print("词法分析日志") }
-            tokens.add(Token(line, row, stater.end!!(), str + text.last()))
+            val stater = Stater(' ',str,"($line,$row)")
+            stater.f()
+            stater.end ?: throw Exception("词法分析错误:状态'$justNow'没有定义结尾状态函数[$line,$row]${lines[f]}")
+            if (str.isEmpty() || ws(str[0])) {
+                if (this@tokens) {
+                    "但是本词法分析器发现最后一个标记是空的,因此帮你丢了,快说:'谢谢词法分析器'(～￣▽￣)～".print("词法分析日志")
+                }
+            } else {
+                if (this@tokens) {
+                    "填入标记->${str + text.last()}<${stater.end!!()}>($line,$row)".print("词法分析日志")
+                }
+                tokens.add(Token(line,row,stater.end!!(),str + text.last()))
+            }
+            tokens.add(Token(line,row,FaceValue.EOF,""))
+            return tokens
         }
-        tokens.add(Token(line, row, FaceValue.EOF, ""))
-        return tokens
-    }
 }
 
 /**

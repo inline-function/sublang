@@ -3,31 +3,6 @@
 package api.tools
 
 import org.jetbrains.annotations.TestOnly
-
-//try部分
-inline fun <reified T:Any?> deal(crossinline code1:()->T?):(Throwable.()->T?)->T? = {
-    try {
-        code1()
-    }catch (e:Throwable){
-        e.it()
-    }
-}
-//catch部分
-inline infix fun <reified T:Any?> ((Throwable.()->T?)->T?).with(noinline code:Throwable.()->T?) : T?{
-    return this(code)
-}
-//没有catch的try语句
-inline fun <T:Any?> pass(code1:()->T){
-    try {
-        code1()
-    }catch (_:Throwable){}
-}
-//后缀if语句
-inline infix fun Boolean.then(code:()->Unit){
-    if (this) {
-        code()
-    }
-}
 //打印
 @JvmName("printSomething")
 fun <T:Any?> T.print(msg : Any? = null) : T = this.apply{
@@ -56,6 +31,16 @@ fun <T:Any?> test(vararg msg : T?) : T =
         it?.apply { this.test }
         ?: "null".test
     }.last() as T
+//后缀if
+@Deprecated(
+    message = "建议使用 if(obj){doing()} 代替",
+    replaceWith = ReplaceWith("if(this){ code() }")
+)
+inline infix fun Boolean.thenDo(code:()->Unit){
+    if (this) {
+        code()
+    }
+}
 //非空运行
 @Deprecated(
     message = "建议使用 obj?.apply { code() } 代替",
@@ -66,5 +51,29 @@ inline infix fun Any?.notNull(code:()->Unit){
         code()
     }
 }
-//函数式类型转换
-inline fun <reified T> Any?.to() : T = this as T
+//字符串重复指定次数
+operator fun String.times(times : Int) : String{
+    var text = ""
+    for (i in 0 until times) {
+        text += this
+    }
+    return text
+}
+//合并列表为字典
+inline fun <L,R,LL,RR,LV,RV> Pair<List<L>,List<R>>.merge(
+    leftToKey:(L)->LL = {it as LL},
+    rightToValue:(R)->RR = {it as RR},
+    keyAndValue:(LL,RR)->Pair<LV,RV> = {left,right->left as LV to right as RV}
+)=first.mapIndexed{index,l->keyAndValue(leftToKey(l),rightToValue(second[index]))}.toMap()
+//干预非空
+inline infix fun <T> Boolean.then(code:()->T) = if(this) code() else null
+//双判空行
+@Deprecated("建议替换成更具kotlin风格的if语句",ReplaceWith("if(!this){then()}else{or()}"))
+inline fun <U,T> U?.isNullThen(then:()->T,or:U.()->T)=if(this==null) then() else this.or()
+//对象是否为空
+val Any?.none : Boolean get() = this == null
+operator fun Any?.not() = this == null
+//关于空的偏函数责任链
+fun <T> List<*>.buildChain(
+    vararg func : ()->T
+):T=func[indexOf(find{it!=null})]()

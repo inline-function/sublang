@@ -1,349 +1,303 @@
+@file:Suppress("NestedLambdaShadowedImplicitParameter")
+
 package api.rule
 
-import api.antlr.SublimationLexer
-import api.antlr.SublimationParser
-import api.antlr.SublimationParser.*
-import api.data.AnnotationNode
+import api.antlr.SubLexer
+import api.antlr.SubParser
+import api.antlr.SubParser.*
+import api.constant.funTypeName
+import api.constant.tupleTypeName
+import api.data.AnnNode
 import api.data.BlockNode
+import api.data.CaseNode.*
 import api.data.ExprNode
 import api.data.ExprNode.*
+import api.data.ExprNode.FaceValueNode.*
 import api.data.FileNode
-import api.data.InnerNode
-import api.data.SENode.*
+import api.data.ParserInfo
 import api.data.StmtNode
-import api.data.TopNode
-import api.data.TopNode.DataNode
-import api.data.TopNode.StructNode
-import api.data.TypeNode
-import api.data.TypeNode.*
-import api.tools.notNull
-import api.tools.print
-import api.tools.then
+import api.data.TopNode.CallableNode.FunctionNode
+import api.data.TopNode.CallableNode.VariableNode
+import api.data.TopNode.CallableNode.VariableNode.VariableNodeKind.*
+import api.data.TopNode.TraitNode
+import api.tools.*
 import org.antlr.v4.runtime.ANTLRInputStream
 import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.ParserRuleContext
+import subCodePath
+import java.io.File
 
-val String.ast : (String)->FileNode get() = {
-    //通过antlr转换语法树
-    val tree = this.antlr
-    //暂时存储顶层数据
-    val list = mutableListOf<TopNode>()
-    //判断顶层语句类型
-    tree.top().forEach {it1->
-        if(it1.data()!=null){
-            //是数据分支
-            list.add(it.data(it1.data()))
-        }else{
-            //是结构体分支
-            list.add(it.struct(it1.struct()))
-        }
-    }
-    //返回文件节点
-    FileNode(
-        name = it,
-        tops = list
-    )
-}
-private fun String.struct(struct : StructContext) : StructNode{
-    return StructNode(
-        innerNode = struct.lrm(this),
-        name = struct.ID().text,
-        data = mutableListOf<DataNode>().apply{
-            struct.data().forEach {it1->
-                data(it1).apply {
-                    notNull {
-                        add(this)
-                    }
-                }
-            }
-        },
-        annotations = mutableListOf<AnnotationNode>().apply {
-            struct.anns().ann().forEach {
-                add(this@struct.annotation(it))
-            }
-        },
-    )
-}
-private fun String.annotation(annotation : AnnContext) : AnnotationNode{
-    val name = annotation.name(0)
-    var value : String? = null
-    annotation.NUMBER() notNull {
-        value = annotation.NUMBER().text
-    }
-    annotation.STRING() notNull {
-        value = annotation.STRING().text.run { substring(1,this.length-1) }
-    }
-    (annotation.name().size == 2) then {
-        value = annotation.name(1).text
-    }
-    return AnnotationNode(
-        innerNode = annotation.lrm(this),
-        name = AccessChainNode(
-            innerNode = annotation.lrm(this),
-            chain = mutableListOf<String>().apply {
-                name.ID().forEach { add(it.text) }
-            }
-        ),
-        value = value
-    )
-}
-private fun String.data(data : DataContext) = DataNode(
-    innerNode = InnerNode(
-        line = data.start.line,
-        row = data.start.charPositionInLine,
-        moduleName = this
-    ),
-    annotations = mutableListOf<AnnotationNode>().apply {
-        data.anns().ann().forEach {
-            add(this@data.annotation(it))
-        }
-    },
-    name = data.ID().text,
-    type = data.type()?.run{ this@data.type(this) },
-    value = data.expr()?.run{ this@data.expr(this)}
-)
-private fun String.expr(expr : ExprContext) : ExprNode{
-    val left = expr.expr__()?.run {
+//不要动函数标签,你会发现把函数体折叠起来函数标签会很整齐
+fun String. toAst   (                              ): FileNode              =
+    root(SubParser(CommonTokenStream(SubLexer(ANTLRInputStream(
+        String(File(subCodePath).inputStream().readAllBytes()).bracesStyle()
+    )))).root())
+fun String. root    ( root    : RootContext        ): FileNode              =FileNode(
+    name = this,
+    tops = root.topStmt().map{
         when{
-            expr()!=null -> {
-                this@expr.expr(expr())
-            }
-            NUMBER()!=null -> {
-                fun <T : Any> fvn(func : String.()->T)
-                    = FaceValueNode(
-                        innerNode = lrm(this@expr),
-                        value = NUMBER().text.func()
-                    )
-                fvn(if (NUMBER().text.contains("."))
-                    String::toDouble
-                else
-                    String::toLong
-                )
-            }
-            STRING()!=null -> FaceValueNode(
-                innerNode = lrm(this@expr),
-                value = STRING().text.run { substring(1,this.length-1) }
-            )
-            lambda()!=null -> LambdaNode(
-                innerNode = lrm(this@expr),
-                params = mutableListOf<DataNode>().apply{
-                    if(lambda().data().isNotEmpty()){
-                        lambda().data().forEach {
-                            add(this@expr.data(it))
-                        }
-                    }else{
-                        lambda().name().forEachIndexed { index, nameContext ->
-                            add(
-                                DataNode(
-                                    innerNode = lrm(this@expr),
-                                    annotations = mutableListOf<AnnotationNode>().apply {
-                                        lambda().anns(index).ann().forEach {
-                                            add(this@expr.annotation(it))
-                                        }
-                                    },
-                                    name = nameContext.text,
-                                    type = null
-                                )
-                            )
-                        }
-                    }
-                },
-                block = BlockNode(
-                    innerNode = lrm(this@expr),
-                    stmts = mutableListOf<StmtNode>().apply {
-                        lambda().block().stmt().forEach { it1 ->
-                            stmt(it1).apply {
-                                add(this)
-                            }
-                        }
-                    }
-                )
-            )
-            invoke()!=null -> InvokeNode(
-                innerNode = lrm(this@expr),
-                name = AccessChainNode(
-                    innerNode = lrm(this@expr),
-                    chain = mutableListOf<String>().apply {
-                        invoke().name().ID().forEach { add(it.text) }
-                    }
-                ),
-                args = mutableListOf<ExprNode>().apply {
-                    invoke().expr().forEach { it1 ->
-                        add(expr(it1))
-                    }
-                }
-            )
-            name()!=null -> AccessChainNode(
-                innerNode = lrm(this@expr),
-                chain = mutableListOf<String>().apply {
-                    name().ID().forEach { add(it.text) }
-                }
-            )
-            else -> null.print()
+            it.function()!=null->function(it.function())
+            it.variable()!=null->variable(it.variable())
+            it.trait()!=null->trait(it.trait())
+            else->never()
         }
-    } ?: PrefixInvokeNode(
-        innerNode = expr.prefixInvoke().lrm(this@expr),
-        name = AccessChainNode(
-            innerNode = expr.prefixInvoke().lrm(this@expr),
-            chain = mutableListOf<String>().apply {
-                expr.prefixInvoke().name().ID().forEach { add(it.text) }
-            }
-        ),
-        args = expr(expr.prefixInvoke().expr())
+    }
+)
+fun String. function( function: FunctionContext    ): FunctionNode          =FunctionNode(
+    node = info(function),
+    name = function.receiver().ID().text,
+    receiver = function.receiver().type()?.let { type(it) },
+    params = function.parameters().isNullThen(
+        then = { emptyList() },
+        or = { params(function.parameters()) }
+    ),
+    body = function.block()?.let { block(it) },
+    type = function.type()?.run { type(function.type()) },
+    annotations = function.annotation().map { ann(it) }
+)
+fun String. ann     ( ann     : AnnotationContext  ): AnnNode               =AnnNode(
+    node = info(ann),
+    name = name(ann.name(0)),
+    value = (ann.name().size >= 2).either(
+        left  = {expr(ann.expr())},
+        right = {name(ann.name(1))}
     )
-    @Suppress("FunctionName")
-    fun expr_lambda(left : ExprNode) : ExprNode{
-        return expr.expr__().expr_().run{
-            try {
-                when{
-                    infixInvoke()!=null -> InfixInvokeNode(
-                        innerNode = expr.lrm(this@expr),
-                        name = AccessChainNode(
-                            innerNode = expr.lrm(this@expr),
-                            chain = mutableListOf<String>().apply {
-                                infixInvoke().name().ID().forEach { add(it.text) }
-                            }
-                        ),
-                        args = left to expr(infixInvoke().expr())
+)
+fun String. block   ( block   : BlockContext       ): BlockNode             =BlockNode(
+    node = info(block),
+    statements = block.stmt().map {
+        it.topStmt().isNullThen(
+            then = { expr(it.expr()) },
+            or = {
+                function()?.run { function(function()) }
+                ?: variable()?.run { variable(variable()) }
+                ?: trait(trait()) as StmtNode
+            }
+        )
+    }
+)
+fun String. params  ( params  : ParametersContext  ): List<VariableNode>    =
+    params.parameter().map {
+      VariableNode(
+          node = info(it),
+          name = it.ID().text,
+          receiver = it.type()?.let { type(it) },
+          type = it.type()?.let { type(it) },
+          kind = it.VAL()?.run { VALUE }
+              ?: it.VAR()?.run { VARIABLE }
+              ?: CONSTANT,
+          value = it.expr()?.let { expr(it) },
+          annotations = it.annotation().map { ann(it) }
+      )
+    }
+fun String. type    ( type    : TypeContext        ): TypeNode              =
+    type.ID()?.run {
+        TypeNode(
+            node = info(type),
+            name = text,
+            generic = type.generic()?.ID()?.isEmpty()?.either(
+                {
+                    type.generic().type().map { type(it) }
+                },{
+                    Pair(type.generic().ID(),type.generic().type()).merge(
+                        { it.text },
+                        { type(it) }
                     )
-                    else -> left
                 }
-            } catch (e:Exception) {
-                left
-            }
+            ) ?: listOf<TypeNode>().left
+        )
+    } ?: type.ARROW()?.run {
+        TypeNode(
+            node = info(type),
+            name = funTypeName,
+            generic = type.type().map { type(it) }.left
+        )
+    } ?: if (type.type().size >= 2)
+        TypeNode(
+            node = info(type),
+            name = tupleTypeName,
+            generic = type.type().map { type(it) }.left
+        ) else type(type.type(0))
+fun String. variable( variable: VariableContext    ): VariableNode          =VariableNode(
+    node = info(variable),
+    name = variable.receiver().ID().text,
+    receiver = variable.receiver().type()?.let { type(it) },
+    type = variable.type()?.let { type(it) },
+    kind = variable.run {
+        VAL()?.run { VALUE } ?: VAR()?.run { VARIABLE } ?: CONT().run { CONSTANT }
+    },
+    value = variable.expr()?.let { expr(it) },
+    annotations = variable.annotation().map { ann(it) }
+)
+fun String. expr    ( expr    : ExprContext        ): ExprNode              =
+    expr.name()?.run {
+       name(this)
+    }
+    ?: expr.NUMBER()?.run {
+        if (expr.NUMBER().text.contains('.')) {
+            DecValueNode(info(expr),expr.NUMBER().text.toDouble())
+        } else {
+            IntValueNode(info(expr),expr.NUMBER().text.toInt())
         }
     }
-    return expr_lambda(left)
-}
-private fun String.stmt(stmt : StmtContext) : StmtNode
-= stmt.run{
-    when{
-        /*assign()!=null -> AssignNode(
-            innerNode = this.lrm(this@stmt),
-            name = AccessChainNode(
-                innerNode = this.lrm(this@stmt),
-                chain = mutableListOf<String>().apply {
-                    this@run.assign().name().ID().forEach{
-                        add(it.text)
-                    }
-                }
-            ),
-            value = this@stmt.expr(assign().expr())
-        )*/
-        data()!=null -> DataNode(
-            innerNode = this.lrm(this@stmt),
-            name = data().ID().text,
-            type = data().type()?.run { type(this) },
-            value = data().expr()?.run { expr(this) },
-            annotations = data().anns().ann().map{ annotation(it) }
-        )
-        invoke()!=null -> InvokeNode(
-            innerNode = this.lrm(this@stmt),
-            name = AccessChainNode(
-                innerNode = this.lrm(this@stmt),
-                chain = mutableListOf<String>().apply {
-                    this@run.invoke().name().ID().forEach{
-                        add(it.text)
-                    }
-                }
-            ),
-            args = mutableListOf<ExprNode>().apply {
-                invoke().expr().forEach {
-                    add(this@stmt.expr(it))
-                }
+    ?: expr.STRING()?.run {
+        StringValueNode(info(expr),expr.STRING().text.substring(1,expr.STRING().text.length - 1))
+    }
+    ?: expr.if_()?.run {
+        `if`(this)
+    }
+    ?: expr.`when`()?.run {
+        `when`(this)
+    }
+    ?: expr.lambda()?.run {
+        lambda(this)
+    }
+    ?: expr.destructuring()?.run {
+        TODO("不支持解构")
+    }
+    ?: expr.expr().run {
+        expr(this)
+    }
+    .run {
+        if (expr.invoke() != null) invoke(expr.invoke())(this) else this
+    }
+fun String. invoke  ( invoke  : InvokeContext      ): (ExprNode)->InvokeNode={
+    InvokeNode(
+        node = info(invoke),
+        invoker = it,
+        args = invoke.ID().isEmpty().either(
+            {invoke.expr().map{expr(it)}},
+            {Pair(invoke.ID(),invoke.expr()).merge(
+                {it.text},
+                {expr(it)}
+            )}
+        ),
+        generic = invoke.generic().ID().isEmpty().either(
+            {invoke.generic().type().map{type(it)}},
+            {Pair(invoke.generic().ID(),invoke.generic().type()).merge(
+                {it.text},
+                {type(it)}
+            )}
+        ),
+        outsideLambda = invoke.kotlinLambda()?.run{ktLambda(invoke.kotlinLambda())},
+    ).run{
+        invoke.invoke().isNullThen(
+            then = {this},
+            or = {
+                invoke(this)(this@run)
             }
         )
-        prefixInvoke()!=null -> PrefixInvokeNode(
-            innerNode = this.lrm(this@stmt),
-            name = AccessChainNode(
-                innerNode = this.lrm(this@stmt),
-                chain = prefixInvoke().name().ID().map{ it.text }
-            ),
-            args = this@stmt.expr(prefixInvoke().expr())
-        )
-        infixInvoke()!=null -> InfixInvokeNode(
-            innerNode = this.lrm(this@stmt),
-            name = AccessChainNode(
-                innerNode = this.lrm(this@stmt),
-                chain = infixInvoke().name().ID().map{ it.text }
-            ),
-            args = this@stmt.expr(expr()) to this@stmt.expr(infixInvoke().expr())
-        )
-        else -> TODO()
     }
 }
-private fun String.type(type : TypeContext) : TypeNode{
-    //如果有箭头,说明是函数类型
-    if (type.ARROW()!=null){
-        val types = mutableListOf<TypeNode>().apply {
-            type.type().forEach {it1->
-                type(it1).apply {
-                    notNull {
-                        add(this!!)
-                    }
-                }
-            }
-        }
-        return FunctionTypeNode(
-            innerNode = InnerNode(
-                line = type.start.line,
-                row = type.start.charPositionInLine,
-                moduleName = this@type
-            ),
-            params = types.dropLast(1),
-            returnType = types.last()
-        )
-    }else{//如果没有,判断ID数量,非0则正常类型
-        if (type.ID().size<=0){
-            //判断有没有两个以上的类型,有则为元组,没有则为类型因子
-            if (type.type().size<=1){
-                return type(type.type(0))
-            }else{
-                return TupleTypeNode(
-                    innerNode = InnerNode(
-                        line = type.start.line,
-                        row = type.start.charPositionInLine,
-                        moduleName = this@type
-                    ),
-                    element = mutableListOf<TypeNode>().apply {
-                        type.type().forEach {it1->
-                            type(it1).apply {
-                                notNull {
-                                    add(this!!)
-                                }
-                            }
-                        }
-                    }
+fun String. lambda  ( lambda  : LambdaContext      ): LambdaNode            =lambda.kotlinLambda().isNullThen(
+    then = {
+        LambdaNode(
+            node = info(lambda),
+            params = lambda.javaLambda().parameters().parameter().map{
+                VariableNode(
+                    node = info(it),
+                    name = it.ID().text,
+                    receiver = null,
+                    type = type(it.type()),
+                    kind = it.VAL()?.run { VALUE }
+                        ?: it.VAR()?.run { VARIABLE }
+                        ?: CONSTANT,
+                    value = expr(it.expr()),
+                    annotations = it.annotation().map { ann(it) }
                 )
-            }
-        }else{
-            return CommonTypeNode(
-                innerNode = InnerNode(
-                    line = type.start.line,
-                    row = type.start.charPositionInLine,
-                    moduleName = this@type
-                ),
-                name = mutableListOf<String>().apply {
-                    type.ID().forEach { it1->
-                        add(it1.text)
-                    }
-                },
-                typeArgs = mutableListOf<TypeNode>().apply{
-                    type.type().forEach {it1->
-                        type(it1).apply {
-                            notNull {
-                                add(this!!)
-                            }
-                        }
+            },
+            body = block(lambda.javaLambda().block())
+        )
+    },
+    or = { ktLambda(lambda.kotlinLambda()) }
+)
+fun String. ktLambda( lambda  : KotlinLambdaContext): LambdaNode            =LambdaNode(
+    node = info(lambda),
+    params = lambda.parameters().parameter().map {
+        VariableNode(
+            node = info(it),
+            name = it.ID().text,
+            receiver = null,
+            type = type(it.type()),
+            kind = it.VAL()?.run { VALUE }
+                ?: it.VAR()?.run { VARIABLE }
+                ?: CONSTANT,
+            value = expr(it.expr()),
+            annotations = it.annotation().map { ann(it) }
+        )
+    },
+    body = BlockNode(
+        node = info(lambda),
+        statements = lambda.stmt().map {
+            it.topStmt().isNullThen(
+                then = { expr(it.expr()) },
+                or = {
+                    it.run {
+                        function()?.run { function(function()) }
+                     ?: variable()?.run { variable(variable()) }
+                     ?: trait(trait())
                     }
                 }
             )
         }
+    )
+)
+fun String.`when`   (`when`   : WhenContext        ): WhenNode              =WhenNode(
+    node = info(`when`),
+    value = `when`.expr()?.run{expr(this)},
+    cases = `when`.case_().map{
+        fun ExprOrBlockContext.eob()=expr().isNullThen(
+            or = {BlockNode(info(this),listOf(expr(expr())))},
+            then = {block(block())}
+        )
+        it.exprCase()?.run {
+            ValueCaseNode(
+                node = info(this),
+                value = expr().map{expr(it)},
+                block = exprOrBlock().eob()
+            )
+        }?:it.typeCase()?.run {
+            TypeCaseNode(
+                node = info(this),
+                matcher = type(type()),
+                block = exprOrBlock().eob()
+            )
+        }?:it.boolCase()?.run {
+            AtCaseNode(
+                node = info(this),
+                bool = expr(expr()),
+                block = exprOrBlock().eob()
+            )
+        }?:it.elseCase().run {
+            ElseCaseNode(
+                node = info(this),
+                block = exprOrBlock().eob()
+            )
+        }
     }
-}
-private val String.antlr get() = SublimationParser(CommonTokenStream(SublimationLexer(ANTLRInputStream(this)))).root()
-private fun ParserRuleContext.lrm(name : String) = InnerNode(
-    line = start.line,
-    row = start.charPositionInLine,
-    moduleName = name
+)
+fun String.`if`     (`if`     : IfContext          ): IfNode                =IfNode(
+    node = info(`if`),
+    condition = expr(`if`.expr()),
+    then = block(`if`.block(0)),
+    `else` = (`if`.block().size==2) then { block(`if`.block(1)) }
+)
+fun String. name    ( name    : NameContext        ): NameNode              =NameNode(
+    node = info(name),
+    chain = name.ID().map{it.text}
+)
+fun String. trait   ( trait   : TraitContext       ): TraitNode             =TraitNode(
+    node = info(trait),
+    name = trait.ID().text,
+    members = trait.variable().map {
+        variable(it)
+    } + trait.function().map {
+        function(it)
+    },
+    annotations = trait.annotation().map { ann(it) }
+)
+fun String. info    ( context : ParserRuleContext  ): ParserInfo            =ParserInfo(
+    line = context.start.line,
+    row = context.start.charPositionInLine,
+    fileName = this
 )

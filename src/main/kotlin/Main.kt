@@ -1,15 +1,13 @@
-import api.data.ProjectNode
-import api.rule.ast
-import api.rule.check
-import api.tools.print
-import api.translators.kotlin.*
-import java.io.File
-import java.io.InputStream
-const val subCodePath = "F:\\JavaProject\\SublimationLang\\docs\\code.sub"
-const val ktCodeLang = "F:\\JavaProject\\SublimationLang\\docs\\code.kt"
-val main get() =
+
+import api.data.*
+import api.rule.*
+import api.tools.*
+
+const val subCodePath = "F:\\JavaProject\\SublimationLang\\cao2gao3\\code.sub"
+const val ktCodeLang = "F:\\JavaProject\\SublimationLang\\cao2gao3\\code.kt"
+/*val main get() =
     ProjectNode(
-        name = "test",
+        nameof = "test",
         files = listOf(
             String(
                 File(subCodePath)
@@ -31,3 +29,10 @@ val main get() =
             .outputStream()
             .use{ it.write(this) }
     }
+*/
+fun main(){
+    ProjectNode(
+        name = "subTest",
+        files = listOf("main".toAst())
+    ).check().print
+}

@@ -1,5 +1,0 @@
-@receiver(T<U>) map : ((U)->R)->T<R> => /* */ ~
-@main _ =>
-    strList = {1,2,3}.map> it.str ~
-    print strList
-~

@@ -1,18 +1,20 @@
 package api.classes
 
+import api.classes.Checker.Information
+import api.classes.Checker.Message
+import api.data.CheckedInfo
 import api.data.InnerNode
 import api.data.Node
-import api.data.ProjectTree
-import api.tools.then
-import api.classes.Checker.*
 import api.data.ProjectNode
+import api.data.ProjectTree
 import api.data.TopTree
 import api.data.Tree
-import api.tools.*
-import javaslang.control.Either
+import api.tools.None
+import api.tools.Some
+import api.tools.some
 
 //从LRM获取Message
-infix fun InnerNode.toLog(log : String) = Message(line,row,moduleName,log)
+infix fun InnerNode.toLog(log : String) = Message(line,row,fileName,log)
 //语义分析器
 class Checker(
     val theTree : ProjectNode
@@ -51,7 +53,7 @@ class Checker(
         }.toString()
     }
     //环境
-    inner class Env<T : Node,U : Tree>(
+    inner class Env<out T : Node,U : Tree>(
         //当前树
         val node : T,
         //父环境
@@ -66,28 +68,24 @@ class Checker(
         operator fun <T:TopTree> T.not() = this.apply{symbols.add(this@not)}
         //查找符号
         @Suppress("UNCHECKED_CAST")
-        fun <T : TopTree> InnerNode.findSymbol(need: String,code: (TopTree) -> Boolean)
-            =generateSequence(this@Env as Env<*,*>) { it.parent }
+        fun <T : TopTree> findSymbol(need: String,code: (TopTree) -> Boolean)
+            =generateSequence(this@Env as Env<*,*>){ it.parent }
             .flatMap { it.symbols.asSequence() }
             .firstOrNull(code)
             .run {
                 if (this != null)
-                    (this as T).okay
+                    (this as T).some
                 else
-                    Error.apply { error("未在本作用域及父作用域内找到该标识符:'$need'") }
+                    None.apply { error("未在本作用域及父作用域内找到该标识符:'$need'") }
             }
-        //查找符号
+        //仅查找符号
         @Suppress("UNCHECKED_CAST")
-        fun <T : TopTree> InnerNode.onlyFindSymbol(need: String,code: (TopTree) -> Boolean)
-                =generateSequence(this@Env as Env<*,*>) { it.parent }
-            .flatMap { it.symbols.asSequence() }
+        fun <T : TopTree> onlyFindSymbol(code: (TopTree) -> Boolean)
+            =generateSequence(this@Env as Env<*,*>){it.parent}
+            .flatMap{it.symbols.asSequence()}
             .firstOrNull(code)
-            .run {
-                if (this != null)
-                    (this as T).okay
-                else
-                    Error
-            }
+            ?.run{Some(this as T)}
+            ?:None
         //散数据
         val someData by lazy{ mutableMapOf<String,Any?>() }
         //数据存储
@@ -110,19 +108,27 @@ class Checker(
         @Suppress("UNCHECKED_CAST")
         fun <T> String.get() : T = someData[this] as T
         //存放到数据
-        infix fun <T : Any> T.name(name : String){
+        infix fun <T : Any> T.nameof(name : String) = this.apply{
             someData[name] = this
         }
         //新树缓存
         var tree : U? = null
+        //返回外部类
+        val outer : Checker get() = this@Checker
         //进入任务并且创建伪子环境
+        @JvmName("thisTask")
+        inline fun <reified TT : Node,reified UU : Tree> TT.task() : UU = task(this)
         inline fun <reified TT : Node,reified UU : Tree> task(node : TT) : UU = call(Env(node,this,symbols))
         inline infix fun <reified TT : Node> TT.taskOf(name : String) = task<TT,Tree>(this) of name
-        inline infix fun <reified TT : Node> TT.taskName(name : String) = task<TT,Tree>(this) name name
+        inline infix fun <reified TT : Node> TT.taskName(name : String) = task<TT,Tree>(this) nameof name
+        //对列表进行依次任务
+        inline fun <reified T : Node,reified R : Tree> List<T>.mapTask() : List<R> = map{task(it)}
         //进入任务并且创建真子环境
         inline fun <reified TT : Node,reified UU : Tree> goInto(node : TT) : UU = call(Env(node,this))
         inline infix fun <reified TT : Node> TT.intoOf(name : String) = task<TT,Tree>(this) of name
-        inline infix fun <reified TT : Node> TT.intoName(name : String) = task<TT,Tree>(this) name name
+        inline infix fun <reified TT : Node> TT.intoName(name : String) = task<TT,Tree>(this) nameof name
+        //对列表进行环境依次任务
+        inline fun <reified TT : Node,reified UU : Tree> List<TT>.mapInto() : List<UU> = map{goInto(it)}
     }
     //字符串与匿名函数的联合
     infix fun <T> List<T>.log(code : (T)->String) = Pair(this,code)
@@ -133,8 +139,8 @@ class Checker(
         var fst = true
         mods.forEach {
             code(it).apply {
-                map.containsKey(this) then {
-                    fst then {
+                if (map.containsKey(this)) {
+                    if (fst) {
                         map[this]!! error log(map[this]!!)
                         fst = false
                     }
@@ -158,19 +164,25 @@ class Checker(
     //错误
     private val errors = mutableListOf<Message>()
     //提示信息
-    infix fun Node.tip(log : String) = when(this){
-        is InnerNode -> tips.check(this toLog log)
-        else -> tips.check(Message(-1,-1,null,log))
+    infix fun Node.tip(log : String) = None.also {
+        when (this) {
+            is InnerNode -> tips.check(this toLog log)
+            else -> tips.check(Message(-1,-1,null,log))
+        }
     }
     //警告信息
-    infix fun Node.warn(log : String) = when(this){
-        is InnerNode -> warnings.check(this toLog log)
-        else -> warnings.check(Message(-1,-1,null,log))
+    infix fun Node.warn(log : String) = None.also {
+        when (this) {
+            is InnerNode -> warnings.check(this toLog log)
+            else -> warnings.check(Message(-1,-1,null,log))
+        }
     }
     //错误信息
-    infix fun Node.error(log : String) = when(this){
-        is InnerNode -> errors.check(this toLog log)
-        else -> errors.check(Message(-1,-1,null,log))
+    infix fun Node.error(log : String) = None.also {
+        when (this) {
+            is InnerNode -> errors.check(this toLog log)
+            else -> errors.check(Message(-1,-1,null,log))
+        }
     }
     //获取信息
     val information : Information get() = Information(tips,warnings,errors)
@@ -183,13 +195,15 @@ class Checker(
             (actions[T::class] as Env<T,U>.()->Unit).invoke(env)
             env.tree as U
         }else{
-            throw Exception("语义分析错误:行为'${T::class}'不存在")
+            throw Exception("语义分析错误:行为'${T::class.simpleName}'不存在")
         }
     }
     //在树内的行为
     inline fun <reified T : Node,reified U : Tree> on(noinline code : Env<T,U>.()->Unit){
         actions[T::class] = code
     }
+    //从节点信息上获取检查信息
+    val Env<InnerNode,*>.infor get() = CheckedInfo(this.node.line,this.node.row,this.node.fileName)
 }
 //开始制定规则
 fun ProjectNode.rule(show : Boolean = false,code : Checker.()->Unit) : Pair<ProjectTree,Information>{

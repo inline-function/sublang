@@ -1,103 +1,163 @@
 package api.data
-import api.data.ExprNode.AccessChainNode
-import api.data.InnerNode.LRM
-import api.data.TopNode.DataNode
 
-interface Node
-interface InnerNode : Node {
-    val line: Int
-    val row: Int
-    val moduleName: String
-    data class LRM(
-        override val line: Int,
-        override val row: Int,
-        override val moduleName: String
-    ) : InnerNode
-    companion object {
-        operator fun invoke(line: Int, row: Int, moduleName: String): InnerNode = LRM(line, row, moduleName)
-    }
+import api.data.ExprNode.*
+import api.data.ExprTree.FaceValueTree
+import api.data.ExprTree.NameTree
+import api.data.TopNode.CallableNode.VariableNode
+import api.tools.Either
+
+sealed interface Node
+data class ParserInfo(
+    val line: Int,
+    val row: Int,
+    val fileName: String
+){
+    override fun toString() = "($fileName:$line,$row)"
+}
+sealed interface InnerNode : Node{
+    val node : ParserInfo
+    val fileName : String
+        get() = node.fileName
+    val line : Int
+        get() = node.line
+    val row : Int
+        get() = node.row
 }
 data class ProjectNode(
-    val name: String = "",
-    val files: List<FileNode> = listOf()
+    val name: String,
+    val files: List<FileNode>
 ) : Node
 data class FileNode(
     val name: String,
-    val tops: List<TopNode> = listOf()
+    val tops: List<TopNode>
 ) : Node
-infix fun Token.nodeAt(moduleName: String) = LRM(line, row, moduleName)
-sealed interface TopNode : InnerNode {
-    val annotations: List<AnnotationNode>
-    val name: String
-    data class DataNode(
-        val innerNode: InnerNode,
-        override val name: String,
-        val type: TypeNode? = null,
-        val value: ExprNode? = null,
-        override val annotations: List<AnnotationNode> = listOf(),
-    ) : TopNode, StmtNode, InnerNode by innerNode
-    data class StructNode(
-        val innerNode: InnerNode,
-        override val name: String,
-        val data: List<DataNode>,
-        override val annotations: List<AnnotationNode> = listOf()
-    ) : TopNode, InnerNode by innerNode
-}
-sealed interface TypeNode : InnerNode {
-    data class CommonTypeNode(
-        val innerNode: InnerNode,
-        val name: List<String>,
-        val typeArgs: List<TypeNode>?
-    ) : TypeNode, InnerNode by innerNode
-    data class TupleTypeNode(
-        val innerNode: InnerNode,
-        val element: List<TypeNode>
-    ) : TypeNode, InnerNode by innerNode
-    data class FunctionTypeNode(
-        val innerNode: InnerNode,
-        val params: List<TypeNode>,
-        val returnType: TypeNode
-    ) : TypeNode, InnerNode by innerNode
-}
-sealed interface ExprNode : InnerNode {
-    data class AccessChainNode(
-        val innerNode: InnerNode,
-        val chain: List<String>
-    ) : ExprNode,InnerNode by innerNode
-    data class FaceValueNode<out T : Any>(
-        val innerNode: InnerNode,
-        val value: T
-    ) : ExprNode, InnerNode by innerNode
-    data class LambdaNode(
-        val innerNode: InnerNode,
-        val params: List<DataNode>,
-        val block : BlockNode
-    ) : ExprNode, InnerNode by innerNode
-}
 sealed interface StmtNode : InnerNode
-data class BlockNode(
-    val innerNode: InnerNode,
-    val stmts: List<StmtNode>
-) : StmtNode, InnerNode by innerNode
-sealed interface SENode : ExprNode,StmtNode{
-    data class InvokeNode(
-        val innerNode: InnerNode,
-        val name: AccessChainNode,
-        val args: List<ExprNode>
-    ) : SENode, InnerNode by innerNode
-    data class PrefixInvokeNode(
-        val innerNode: InnerNode,
-        val name: AccessChainNode,
-        val args: ExprNode
-    ) : SENode, InnerNode by innerNode
-    data class InfixInvokeNode(
-        val innerNode: InnerNode,
-        val name: AccessChainNode,
-        val args: Pair<ExprNode, ExprNode>
-    ) : SENode, InnerNode by innerNode
+sealed interface TopNode : StmtNode{
+    val name : String
+    val annotations : List<AnnNode>
+    sealed interface CallableNode : TopNode{
+        val receiver : TypeNode?
+        val type : TypeNode?
+        data class VariableNode(
+            override val node : ParserInfo,
+            override val name : String,
+            override val receiver : TypeNode?,
+            override val type : TypeNode?,
+            val kind : VariableNodeKind,
+            val value : ExprNode?,
+            override val annotations : List<AnnNode>
+        ) : CallableNode{
+            enum class VariableNodeKind{
+                VARIABLE,
+                VALUE,
+                CONSTANT
+            }
+        }
+        data class FunctionNode(
+            override val node : ParserInfo,
+            override val name : String,
+            override val receiver : TypeNode?,
+            val params : List<VariableNode>,
+            val body : BlockNode?,
+            override val type : TypeNode?,
+            override val annotations : List<AnnNode>
+        ) : CallableNode
+    }
+    data class TraitNode(
+        override val node : ParserInfo,
+        override val name : String,
+        val members : List<CallableNode>,
+        override val annotations : List<AnnNode>
+    ) : TopNode
 }
-data class AnnotationNode(
-    val innerNode: InnerNode,
-    val name: AccessChainNode,
-    val value: String?
-) : InnerNode by innerNode
+sealed interface ExprNode : StmtNode{
+    sealed interface FaceValueNode<out T> : ExprNode{
+        val value : T
+        data class IntValueNode(
+            override val node : ParserInfo,
+            override val value : Int
+        ) : FaceValueNode<Int>
+        data class DecValueNode(
+            override val node : ParserInfo,
+            override val value : Double
+        ) : FaceValueNode<Double>
+        data class StringValueNode(
+            override val node : ParserInfo,
+            override val value : String
+        ) : FaceValueNode<String>
+        data class BoolValueNode(
+            override val node : ParserInfo,
+            override val value : Boolean
+        ) : FaceValueNode<Boolean>
+        data class UnitValueNode(
+            override val node : ParserInfo,
+            override val value : Unit = Unit
+        ) : FaceValueNode<Unit>
+        data class NullValueNode(
+            override val node : ParserInfo,
+            override val value : Nothing? = null
+        ) : FaceValueNode<Nothing?>
+    }
+    data class NameNode(
+        override val node : ParserInfo,
+        val chain : List<String>
+    ) : ExprNode
+    data class TypeNode(
+        override val node : ParserInfo,
+        val name : String,
+        val generic : Either<List<TypeNode>,Map<String,TypeNode>>
+    ) : ExprNode
+    data class IfNode(
+        override val node : ParserInfo,
+        val condition : ExprNode,
+        val then : BlockNode,
+        val `else` : BlockNode?
+    ) : ExprNode
+    data class WhenNode(
+        override val node : ParserInfo,
+        val value : ExprNode?,
+        val cases : List<CaseNode>
+    ) : ExprNode
+    data class LambdaNode(
+        override val node : ParserInfo,
+        val params : List<VariableNode>,
+        val body : BlockNode
+    ) : ExprNode
+    data class InvokeNode(
+        override val node : ParserInfo,
+        val invoker : ExprNode,
+        val args : Either<List<ExprNode>,Map<String,ExprNode>>,
+        val generic : Either<List<TypeNode>,Map<String,TypeNode>>,
+        val outsideLambda : LambdaNode?
+    ) : ExprNode
+}
+data class AnnNode(
+    override val node : ParserInfo,
+    val name : NameNode,
+    val value : Either<ExprNode,NameNode>?
+) : InnerNode
+data class BlockNode(
+    override val node : ParserInfo,
+    val statements : List<StmtNode>
+) : InnerNode,List<StmtNode> by statements
+sealed interface CaseNode : InnerNode{
+    data class ElseCaseNode(
+        override val node : ParserInfo,
+        val block : BlockNode
+    ) : CaseNode
+    data class ValueCaseNode(
+        override val node : ParserInfo,
+        val value : List<ExprNode>,
+        val block : BlockNode
+    ) : CaseNode
+    data class AtCaseNode(
+        override val node : ParserInfo,
+        val bool : ExprNode,
+        val block : BlockNode
+    ) : CaseNode
+    data class TypeCaseNode(
+        override val node : ParserInfo,
+        val matcher : TypeNode,
+        val block : BlockNode
+    ) : CaseNode
+}
