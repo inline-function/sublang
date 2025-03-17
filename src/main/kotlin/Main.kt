@@ -2,7 +2,9 @@
 import api.data.*
 import api.rule.*
 import api.tools.*
+import api.translators.kotlin.kotlinTree
 
+var a = 0
 const val subCodePath = "F:\\JavaProject\\SublimationLang\\cao2gao3\\code.sub"
 const val ktCodeLang = "F:\\JavaProject\\SublimationLang\\cao2gao3\\code.kt"
 /*val main get() =
@@ -34,5 +36,7 @@ fun main(){
     ProjectNode(
         name = "subTest",
         files = listOf("main".toAst())
-    ).check().print
+    ).print.check().print.run{
+        first.kotlinTree.print
+    }
 }

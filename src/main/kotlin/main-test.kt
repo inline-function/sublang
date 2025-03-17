@@ -18,11 +18,27 @@ import org.jetbrains.annotations.TestOnly
 import java.io.IOException
 
 const val path = "C:\\Users\\ZhuanZ\\Desktop\\草稿.txt"
-fun main(){ theMain().func() }
-fun theMain() = allDo(
-    printLine("开始写入文件..."),
-    writeFile(path,"我是内容"),
-    printLine("写入完毕")
-) catch {it:Throwable->
-    printLine(it.message!!)
+fun main() {
+    buildList{
+        repeat(readln().toInt()) {
+            addAll(
+                readln()
+                    .trim()
+                    .split(Regex("\\s+"))
+                    .map(String::toInt)
+            )
+        }
+    }.sorted().apply{
+        var duplicate = -1
+        var missing = -1
+        (1 until size).forEach {
+            val prev = this[it - 1]
+            val current = this[it]
+            when{
+                prev == current    -> duplicate = current
+                current - prev > 1 -> missing = prev + 1
+            }
+        }
+        println("$missing $duplicate")
+    }
 }

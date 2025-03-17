@@ -6,8 +6,8 @@ import api.classes.rule
 import api.data.*
 import api.data.ExprNode.*
 import api.data.ExprNode.FaceValueNode.*
+import api.data.ExprTree.*
 import api.data.ExprTree.FaceValueTree.UnitValueTree
-import api.data.ExprTree.NameTree
 import api.data.TopNode.*
 import api.data.TopNode.CallableNode.FunctionNode
 import api.data.TopNode.CallableNode.VariableNode
@@ -18,15 +18,12 @@ import api.data.TopTree.CallableTree.VariableTree
 import api.data.TopTree.CallableTree.VariableTree.VariableTreeType
 import api.data.id
 import api.tools.None
-import api.tools.Optional
 import api.tools.Some
 import api.tools.apply
 import api.tools.flatMap
-import api.tools.isNone
-import api.tools.isNoneThen
 import api.tools.isNullThen
-import api.tools.isSome
 import api.tools.mayApply
+import api.tools.not
 import api.tools.some
 import api.tools.such
 
@@ -143,6 +140,32 @@ fun ProjectNode.check() = rule{
             is NameNode        -> task(node)
             is TypeNode        -> task(node)
             is WhenNode        -> task(node)
+        }
+    }
+    on<InvokeNode,InvokeTree>{
+        tree = invokeTree {
+            invoker = node.invoker.task<_,ExprTree>().some
+            args = node.args.such(
+                left = {
+                    //TODO转换支持
+                    emptyMap()
+                },
+                right = {
+                    it.toList().associate{(key,value)-> key.id to task(value)}
+                }
+            )
+            generic = node.generic.run{
+                //TODO不支持泛型
+                emptyMap()
+            }
+            outsideLambda = node.outsideLambda?.task<_,LambdaTree>()?.some ?: None
+            type = onlyFindSymbol<TraitTree>{ (invoker!!.not()).type.not().name == it.name.text }.such(
+                none = {error("没有在代码中找到该特质")},
+                some = {
+                    //TODO调用表达式的类型
+                    None
+                }
+            )
         }
     }
     on<NameNode,NameTree>{

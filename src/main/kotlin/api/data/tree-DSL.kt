@@ -26,7 +26,7 @@ class TheFunctionTree{
     var name : api.data.ID? = null
     var body : api.tools.Optional<kotlin.Lazy<api.data.Block>>? = null
     var type : api.tools.Optional<api.data.TypeTree>? = null
-    var receiver : api.tools.Optional<api.data.TypeTree?>? = null
+    var receiver : api.tools.Optional<api.data.TypeTree>? = null
     var params : kotlin.collections.List<api.tools.Optional<api.data.TopTree.CallableTree.VariableTree>>? = null
     var annotations : kotlin.collections.List<api.data.AnnTree>? = null
 }
@@ -47,6 +47,7 @@ class TheTraitTree{
     var name : api.data.ID? = null
     var members : kotlin.collections.List<api.data.TopTree.CallableTree>? = null
     var annotations : kotlin.collections.List<api.data.AnnTree>? = null
+    var parent : api.data.TypeTree?? = null
 }
 fun Env<InnerNode,*>.traitTree(action : TheTraitTree.() -> Unit) = TheTraitTree().apply(action).let {
     it.info = this.outer.run{ this@traitTree.infor }
@@ -54,12 +55,13 @@ fun Env<InnerNode,*>.traitTree(action : TheTraitTree.() -> Unit) = TheTraitTree(
         name = it.name!!,
         members = it.members!!,
         annotations = it.annotations!!,
+        parent = it.parent!!,
        
     )
 }
 class TheVariableTree{
     var info : api.data.CheckedInfo? = null
-    var receiver : api.tools.Optional<api.data.TypeTree?>? = null
+    var receiver : api.tools.Optional<api.data.TypeTree>? = null
     var type : api.tools.Optional<api.data.TypeTree>? = null
     var name : api.data.ID? = null
     var kind : api.data.TopTree.CallableTree.VariableTree.VariableTreeType? = null
@@ -109,7 +111,7 @@ class TheInvokeTree{
     var invoker : api.tools.Optional<api.data.ExprTree>? = null
     var args : kotlin.collections.Map<api.data.ID, api.data.ExprTree>? = null
     var generic : kotlin.collections.Map<api.data.ID, api.data.TypeTree>? = null
-    var outsideLambda : api.data.ExprTree.LambdaTree?? = null
+    var outsideLambda : api.tools.Optional<api.data.ExprTree.LambdaTree>? = null
     var type : api.tools.Optional<api.data.TypeTree>? = null
 }
 fun Env<InnerNode,*>.invokeTree(action : TheInvokeTree.() -> Unit) = TheInvokeTree().apply(action).let {

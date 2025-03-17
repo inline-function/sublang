@@ -24,14 +24,19 @@ import api.tools.*
 import org.antlr.v4.runtime.ANTLRInputStream
 import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.ParserRuleContext
+import org.antlr.v4.runtime.tree.Trees.toStringTree
 import subCodePath
 import java.io.File
 
 //不要动函数标签,你会发现把函数体折叠起来函数标签会很整齐
 fun String. toAst   (                              ): FileNode              =
     root(SubParser(CommonTokenStream(SubLexer(ANTLRInputStream(
-        String(File(subCodePath).inputStream().readAllBytes()).bracesStyle()
-    )))).root())
+        String(File(subCodePath).inputStream().readAllBytes()).bracesStyle().test
+    )))).run{
+        root().apply {
+            toStringTree(this@run).test
+        }
+    })
 fun String. root    ( root    : RootContext        ): FileNode              =FileNode(
     name = this,
     tops = root.topStmt().map{
@@ -130,7 +135,7 @@ fun String. variable( variable: VariableContext    ): VariableNode          =Var
     annotations = variable.annotation().map { ann(it) }
 )
 fun String. expr    ( expr    : ExprContext        ): ExprNode              =
-    expr.name()?.run {
+    (expr.name()?.run {
        name(this)
     }
     ?: expr.NUMBER()?.run {
@@ -153,12 +158,11 @@ fun String. expr    ( expr    : ExprContext        ): ExprNode              =
         lambda(this)
     }
     ?: expr.destructuring()?.run {
-        TODO("不支持解构")
+        TODO("解构")
     }
     ?: expr.expr().run {
         expr(this)
-    }
-    .run {
+    }).run {
         if (expr.invoke() != null) invoke(expr.invoke())(this) else this
     }
 fun String. invoke  ( invoke  : InvokeContext      ): (ExprNode)->InvokeNode={
@@ -172,13 +176,13 @@ fun String. invoke  ( invoke  : InvokeContext      ): (ExprNode)->InvokeNode={
                 {expr(it)}
             )}
         ),
-        generic = invoke.generic().ID().isEmpty().either(
+        generic = invoke.generic()?.ID()?.isEmpty()?.either(
             {invoke.generic().type().map{type(it)}},
             {Pair(invoke.generic().ID(),invoke.generic().type()).merge(
                 {it.text},
                 {type(it)}
             )}
-        ),
+        ) ?: listOf<TypeNode>().left,
         outsideLambda = invoke.kotlinLambda()?.run{ktLambda(invoke.kotlinLambda())},
     ).run{
         invoke.invoke().isNullThen(
@@ -294,7 +298,8 @@ fun String. trait   ( trait   : TraitContext       ): TraitNode             =Tra
     } + trait.function().map {
         function(it)
     },
-    annotations = trait.annotation().map { ann(it) }
+    annotations = trait.annotation().map { ann(it) },
+    parent = TODO()
 )
 fun String. info    ( context : ParserRuleContext  ): ParserInfo            =ParserInfo(
     line = context.start.line,

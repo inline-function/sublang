@@ -37,14 +37,19 @@ function : annotation* FUN receiver gen? ('(' parameters? ')')? (':' type)? bloc
 type : (ID generic?) | ('(' type ',' type (',' type)* ')') | ('(' type (',' type)* ')' ARROW type) | ('(' type ')');
 expr : (NUMBER | STRING | name | if | when | lambda | destructuring | '(' expr ')') invoke?;
 //gen是泛型声明,generic是泛型指定
-gen : '[' (CON|COV) ID (':' type)? ('=' type)? (',' (CON|COV) ID (':' type)? ('=' type)?)* ']';
+gen : '[' (CON|COV)? ID (':' type)? ('=' type)? (',' (CON|COV)? ID (':' type)? ('=' type)?)* ']';
 generic : '[' ((type|ENMTY) (',' (type|ENMTY))*|(ID '=' (type|ENMTY) (',' ID '=' (type|ENMTY))*)) ']';
 //不允许无圆括号调用,拥有类型参数或尾随匿名函数除外
 invoke :((generic | generic kotlinLambda | kotlinLambda) invoke?) |
-        (generic? ('('((expr (',' expr)*)|(ID '=' expr (',' ID '=' expr)*))?')') kotlinLambda? invoke?);
+        (generic? ('('
+             (
+                (expr (',' expr)*)|
+                (ID '=' expr (',' ID '=' expr)*)
+             )?
+        ')') kotlinLambda? invoke?);
 if : IF expr block (ELSE block)?;
 case : exprCase | elseCase | typeCase | boolCase;
-when : IF expr '{' case* '}';
+when : IF expr? '{' case* '}';
 exprOrBlock : expr | block;
 exprCase : IS (expr (',' expr)*) '->' exprOrBlock;
 elseCase : ELSE '->' exprOrBlock;

@@ -41,20 +41,20 @@ sealed interface TopTree : StmtTree{
     val name : ID
     //TODO没有泛型是因为这个是一个预览版特性
     sealed interface CallableTree : TopTree{
-        val receiver : Optional<TypeTree?>
+        val receiver : Optional<TypeTree>
         val type : Optional<TypeTree>
         data class FunctionTree(
             override val info : CheckedInfo,
             override val name : ID,
             val body : Optional<Lazy<Block>>,
             override val type : Optional<TypeTree>,
-            override val receiver : Optional<TypeTree?>,
+            override val receiver : Optional<TypeTree>,
             val params : List<Optional<VariableTree>>,
             override val annotations : List<AnnTree>
         ) : CallableTree
         data class VariableTree(
             override val info : CheckedInfo,
-            override val receiver : Optional<TypeTree?>,
+            override val receiver : Optional<TypeTree>,
             override val type : Optional<TypeTree>,
             override val name : ID,
             val kind : VariableTreeType,
@@ -70,7 +70,8 @@ sealed interface TopTree : StmtTree{
         override val info : CheckedInfo,
         override val name : ID,
         val members : List<CallableTree>,
-        override val annotations : List<AnnTree>
+        override val annotations : List<AnnTree>,
+        val parent : TypeTree?
     ) : TopTree
 }
 @JvmInline value class Block(private val stmts : List<StmtTree>) : List<StmtTree> by stmts,Tree
@@ -95,7 +96,7 @@ sealed interface ExprTree : StmtTree{
         val invoker : Optional<ExprTree>,
         val args : Map<ID,ExprTree>,
         val generic : Map<ID,TypeTree>,
-        val outsideLambda : LambdaTree?,
+        val outsideLambda : Optional<LambdaTree>,
         override val type : Optional<TypeTree>
     ) : ExprTree
     data class LambdaTree(

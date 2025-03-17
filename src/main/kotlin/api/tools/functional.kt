@@ -8,20 +8,27 @@ value class Some<out T>(
     val value : T
 ) : Optional<T>
 data object None : Optional<Nothing>
-val Optional<*>.isSome get() = this is Some
-val Optional<*>.isNone get() = this is Error
-operator fun <T> Optional<T>.invoke() = when(this){
+fun exception(context:Any?=null) : Nothing =
+    if(context == null)
+        throw Exception()
+    else
+        throw Exception(context.toString())
+operator fun <T> Optional<T>.not() = when(this){
     is Some -> value
-    None -> never()
+    None -> exception("风险式解包到了空对象")
 }
-operator fun <T> Optional<T>.not() = this()
-val <T> Optional<T>.value get() = this()
-infix fun <R> Optional<*>.isNoneThen(code:()->R)=when(this){
-    is Some -> None
-    None -> code().some
+val <T> Optional<T>.toNullable get() = such({null},{it})
+val <T> T?.toOptional get() = this?.apply(::Some)?:None
+infix fun <R> Optional<R>.or(obj:Optional<R>)=when(this){
+    is Some -> this
+    None -> obj
 }
-infix fun <R> Optional<*>.isSomeThen(code:()->R)=when(this){
-    is Some -> code().some
+inline infix fun <T,U> Optional<T>.map(code : (T)->U) = when(this){
+    is Some -> Some(code(value))
+    None -> None
+}
+inline infix fun <T,U> Optional<T>.flatMap(code : (T)->Optional<U>) = when(this){
+    is Some -> code(value)
     None -> None
 }
 val <T> T.some get() = Some(this)
@@ -32,20 +39,12 @@ inline fun <T,U> Optional<T>.such(
     is Some -> some(value)
     None -> none()
 }
-inline fun <T> nullable(code:()->T)=
+inline fun <T> nullable(code:()->T?)=
     try {
         code()?.some ?: None
     } catch (e : Exception) {
         None
     }
-inline infix fun <T,U> Optional<T>.map(code : (T)->U) = when(this){
-    is Some -> Some(code(value))
-    None -> None
-}
-inline infix fun <T,U> Optional<T>.flatMap(code : (T)->Optional<U>) = when(this){
-    is Some -> code(value)
-    None -> None
-}
 sealed interface Either<out L : Any,out R : Any>
 @JvmInline
 value class Left<out L : Any>(

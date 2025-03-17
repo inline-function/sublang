@@ -10,7 +10,7 @@ fun String.bracesStyle(retract : Int = 4) = "$this\n".split("\n")
         } + 0
         drop(1).foldIndexed(this[0]){index,acc,it->
             acc+(
-                    if(ints[index] < ints[index+1]) "{" else ""
+                    if(ints[index] < ints[index+1]) "{" else " "
                 )+(
                     if(ints[index] > ints[index+1])
                         "}" * ((ints[index]-ints[index+1]) / retract)

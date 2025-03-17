@@ -72,7 +72,7 @@ class Checker(
             =generateSequence(this@Env as Env<*,*>){ it.parent }
             .flatMap { it.symbols.asSequence() }
             .firstOrNull(code)
-            .run {
+            .run{
                 if (this != null)
                     (this as T).some
                 else

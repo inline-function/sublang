@@ -67,7 +67,8 @@ sealed interface TopNode : StmtNode{
         override val node : ParserInfo,
         override val name : String,
         val members : List<CallableNode>,
-        override val annotations : List<AnnNode>
+        override val annotations : List<AnnNode>,
+        val parent : TypeNode?
     ) : TopNode
 }
 sealed interface ExprNode : StmtNode{
