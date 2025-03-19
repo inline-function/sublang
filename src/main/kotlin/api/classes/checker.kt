@@ -111,8 +111,6 @@ class Checker(
         infix fun <T : Any> T.nameof(name : String) = this.apply{
             someData[name] = this
         }
-        //新树缓存
-        var tree : U? = null
         //返回外部类
         val outer : Checker get() = this@Checker
         //进入任务并且创建伪子环境
@@ -192,14 +190,13 @@ class Checker(
     @Suppress("UNCHECKED_CAST")
     inline fun <reified T : Node,reified U : Tree> call(env : Env<T,U>) : U{
         return if(actions.contains(T::class)){
-            (actions[T::class] as Env<T,U>.()->Unit).invoke(env)
-            env.tree as U
+            (actions[T::class] as Env<T,U>.()->U).invoke(env)
         }else{
             throw Exception("语义分析错误:行为'${T::class.simpleName}'不存在")
         }
     }
     //在树内的行为
-    inline fun <reified T : Node,reified U : Tree> on(noinline code : Env<T,U>.()->Unit){
+    inline fun <reified T : Node,reified U : Tree> on(noinline code : Env<T,U>.()->U){
         actions[T::class] = code
     }
     //从节点信息上获取检查信息

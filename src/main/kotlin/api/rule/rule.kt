@@ -7,7 +7,7 @@ import api.data.*
 import api.data.ExprNode.*
 import api.data.ExprNode.FaceValueNode.*
 import api.data.ExprTree.*
-import api.data.ExprTree.FaceValueTree.UnitValueTree
+import api.data.ExprTree.FaceValueTree.*
 import api.data.TopNode.*
 import api.data.TopNode.CallableNode.FunctionNode
 import api.data.TopNode.CallableNode.VariableNode
@@ -17,68 +17,76 @@ import api.data.TopTree.CallableTree.FunctionTree
 import api.data.TopTree.CallableTree.VariableTree
 import api.data.TopTree.CallableTree.VariableTree.VariableTreeType
 import api.data.id
+import api.tools.Either
 import api.tools.None
 import api.tools.Some
 import api.tools.apply
 import api.tools.flatMap
 import api.tools.isNullThen
+import api.tools.left
+import api.tools.map
 import api.tools.mayApply
 import api.tools.not
+import api.tools.right
 import api.tools.some
 import api.tools.such
 
 fun ProjectNode.check() = rule{
     on<ProjectNode,ProjectTree>{
-        tree = projectTree {
-            name = node.name.id
+        ProjectTree(
+            name = node.name.id,
             children = node.files.mapTask()
-        }
+        )
     }
     on<FileNode,ModuleTree>{
-        tree = moduleTree{
-            name = node.name.id
+        ModuleTree(
+            name = node.name.id,
             children = node.tops.mapTask()
-        }
+        )
     }
     on<TraitNode,TraitTree>{
-        tree = traitTree{
-            name = node.name.id
-            members = node.members.mapTask()
-            annotations = node.annotations.mapTask()
-        }
+        TraitTree(
+            name = node.name.id,
+            members = node.members.mapTask(),
+            annotations = node.annotations.mapTask(),
+            info = infor,
+            parent = TODO()
+        )
     }
     on<TopNode,TopTree> {
-        tree = when(node){
+        when(node){
             is TraitNode    -> task(node)
             is CallableNode -> task(node)
         }
     }
     on<CallableNode,CallableTree> {
-        tree = when(node){
+        when(node){
             is FunctionNode -> task(node)
             is VariableNode -> task(node)
         }
     }
     on<VariableNode,VariableTree> {
-        tree = variableTree {
-            name = node.name.id
-            receiver = node.receiver?.task<TypeNode,TypeTree>()?.some ?: None
+        VariableTree(
+            name = node.name.id,
+            receiver = node.receiver?.task<TypeNode,TypeTree>()?.some ?: None,
             type = node.type.isNullThen(
                 then = { TODO() },
                 or =   { Some(task(this)) }
-            )
-            value = node.value?.run{task<ExprNode,ExprTree>(this).some} ?: None
+            ),
+            value = node.value?.run{task<ExprNode,ExprTree>(this).some} ?: None,
             kind = when(node.kind){
                 VARIABLE -> VariableTreeType.VARIABLE
                 VALUE    -> VariableTreeType.VALUE
                 CONSTANT -> VariableTreeType.CONSTANT
-            }
-            annotations = node.annotations.mapTask()
-        }
+            },
+            annotations = node.annotations.mapTask(),
+            info = infor,
+        )
     }
     on<TypeNode,TypeTree>{
-        tree = typeTree {
-            name = node.name
+        TypeTree(
+            name = node.name,
+            info = infor,
             generic = node.generic.such(
                 left = {
                     if(it.isNotEmpty())
@@ -100,26 +108,42 @@ fun ProjectNode.check() = rule{
 //                    }.toMap()
                 }
             )
-        }
+        )
     }
     on<FunctionNode,FunctionTree> {
-        tree = functionTree {
-            name = node.name.id
-            body = node.body?.let { lazy { it.task<BlockNode,Block>() } }?.some ?: None
+        FunctionTree(
+            name = node.name.id,
+            body = node.body?.let { lazy { it.task<BlockNode,Block>() } }?.some ?: None,
             type = node.type.isNullThen(
                 then = { UnitValueTree(infor).type },
                 or =   { Some(task(this)) }
-            )
-            receiver = node.receiver?.task() ?: None
-            params = node.params.mapTask()
+            ),
+            receiver = node.receiver?.task() ?: None,
+            params = node.params.mapTask(),
+            info = infor,
             annotations = node.annotations.mapTask()
-        }
+        )
+    }
+    on<AnnNode,AnnTree>{
+        AnnTree(
+            info = infor,
+            name = node.name.task(),
+            value = node.value?.map(
+                left = {it.task()},
+                right = {
+                    NameNode(
+                        node = node.node,
+                        chain = listOf(it.text)
+                    ).task()
+                }
+            )
+        )
     }
     on<BlockNode,Block>{
-        tree = node.map<StmtNode,StmtTree>{ it.task() }.block
+        node.map<StmtNode,StmtTree>{ it.task() }.block
     }
     on<StmtNode,StmtTree>{
-        tree = when(node){
+        when(node){
             is VariableNode -> task(node)
             is ExprNode     -> task(node)
             is FunctionNode -> task(node)
@@ -127,13 +151,31 @@ fun ProjectNode.check() = rule{
         }
     }
     on<ExprNode,ExprTree>{
-        tree = when(node){
-            is BoolValueNode   -> boolValueTree { value = node.value }
-            is DecValueNode    -> decValueTree  { value = node.value }
-            is IntValueNode    -> intValueTree  { value = node.value }
-            is NullValueNode   -> nullValueTree { value = node.value }
-            is UnitValueNode   -> unitValueTree { value = node.value }
-            is StringValueNode -> strValueTree  { value = node.value }
+        when(node){
+            is BoolValueNode   -> BoolValueTree(
+                value = node.value,
+                info = infor,
+            )
+            is DecValueNode    -> DecValueTree(
+                value = node.value,
+                info = infor,
+            )
+            is IntValueNode    -> IntValueTree(
+                value = node.value,
+                info = infor,
+            )
+            is NullValueNode   -> NullValueTree(
+                value = node.value,
+                info = infor,
+            )
+            is UnitValueNode   -> UnitValueTree(
+                value = node.value,
+                info = infor,
+            )
+            is StringValueNode -> StrValueTree(
+                value = node.value,
+                info = infor,
+            )
             is IfNode          -> task(node)
             is InvokeNode      -> task(node)
             is LambdaNode      -> task(node)
@@ -143,22 +185,23 @@ fun ProjectNode.check() = rule{
         }
     }
     on<InvokeNode,InvokeTree>{
-        tree = invokeTree {
-            invoker = node.invoker.task<_,ExprTree>().some
+        val invoker = node.invoker.task<_,ExprTree>().some
+        InvokeTree(
+            invoker = invoker,
+            info = infor,
             args = node.args.such(
                 left = {
-                    //TODO转换支持
-                    emptyMap()
+                    it.mapTask<_,ExprTree>().left
                 },
                 right = {
-                    it.toList().associate{(key,value)-> key.id to task(value)}
+                    it.entries.associate { (key,value) -> key.id to task<_,ExprTree>(value) }.right
                 }
-            )
+            ),
             generic = node.generic.run{
                 //TODO不支持泛型
                 emptyMap()
-            }
-            outsideLambda = node.outsideLambda?.task<_,LambdaTree>()?.some ?: None
+            },
+            outsideLambda = node.outsideLambda?.task<_,LambdaTree>()?.some ?: None,
             type = onlyFindSymbol<TraitTree>{ (invoker!!.not()).type.not().name == it.name.text }.such(
                 none = {error("没有在代码中找到该特质")},
                 some = {
@@ -166,11 +209,12 @@ fun ProjectNode.check() = rule{
                     None
                 }
             )
-        }
+        )
     }
     on<NameNode,NameTree>{
-        tree = nameTree {
-            china = node.chain
+        NameTree(
+            china = node.chain,
+            info = infor,
             type = onlyFindSymbol<TopTree>{
                 it.name.text == node.chain.first()
             } flatMap {
@@ -180,7 +224,7 @@ fun ProjectNode.check() = rule{
                     is VariableTree -> it.type
                 }
             }
-        }
+        )
     }
 } apply {
     first.children.forEach {

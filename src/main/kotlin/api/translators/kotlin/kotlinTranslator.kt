@@ -52,13 +52,33 @@ val ProjectTree.kotlinTree : KTProjectTree
     on<FunctionTree,KTFunctionTree>{
         KTFunctionTree(
             name = name.text,
-            params = params.associate{ (!it).name.text to call((!it).kind) },
-            body = call((!body).value),
+            params = params.associate{ it.name.text to call(!it.type) },
+            body = body.toNullable?.let { call(it.value) } ?: KTBlockTree(listOf()),
             receiver = receiver.toNullable?.let(::call),
             //TODO不支持泛型
             generic = listOf(),
             annotations = annotations.map(::call),
             modifiers = listOf(),
+        )
+    }
+    on<TypeTree,KTTypeTree>{
+        KTTypeTree(
+            name = name,
+            //TODO不支持泛型
+            generic = listOf()
+        )
+    }
+    on<AnnTree,KTAnnotationTree>{
+        KTAnnotationTree(
+            name = name.china.first(),
+            args = value?.such(
+                left = {
+                    listOf(KTFaceTree(it.toString()))
+                },
+                right = {
+                    listOf(KTFaceTree(it.china.first()))
+                }
+            ) ?: listOf(),
         )
     }
     on<Block,KTBlockTree>{
@@ -81,7 +101,16 @@ val ProjectTree.kotlinTree : KTProjectTree
             )
             is InvokeTree -> KTInvokeTree(
                 name = call(!invoker),
-                args = args.toList().associate { (key,value) -> key.text to call(value) },
+                args = args.such(
+                    left = {
+                        it.map<_,KTExpressionTree>(::call).left
+                    },
+                    right = {
+                        it.entries.associate<_,_,KTExpressionTree>{
+                            (k,v) -> k.text to call(v)
+                        }.right
+                    }
+                ),
             )
             is LambdaTree -> TODO()
             is NameTree -> KTNameTree(this)
@@ -102,8 +131,13 @@ val ProjectTree.kotlinTree : KTProjectTree
             is IfTree -> TODO()
             is InvokeTree -> TODO()
             is LambdaTree -> TODO()
-            is NameTree -> TODO()
+            is NameTree -> call(this)
             is WhenTree -> TODO()
         }
+    }
+    on<NameTree,KTNameTree>{
+        KTNameTree(
+            chain = china
+        )
     }
 }

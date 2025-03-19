@@ -49,7 +49,7 @@ sealed interface TopTree : StmtTree{
             val body : Optional<Lazy<Block>>,
             override val type : Optional<TypeTree>,
             override val receiver : Optional<TypeTree>,
-            val params : List<Optional<VariableTree>>,
+            val params : List<VariableTree>,
             override val annotations : List<AnnTree>
         ) : CallableTree
         data class VariableTree(
@@ -94,7 +94,7 @@ sealed interface ExprTree : StmtTree{
     data class InvokeTree(
         override val info : CheckedInfo,
         val invoker : Optional<ExprTree>,
-        val args : Map<ID,ExprTree>,
+        val args : Either<List<ExprTree>,Map<ID,ExprTree>>,
         val generic : Map<ID,TypeTree>,
         val outsideLambda : Optional<LambdaTree>,
         override val type : Optional<TypeTree>

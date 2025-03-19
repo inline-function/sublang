@@ -5,6 +5,7 @@ package api.translators.kotlin
 import api.tools.Either
 import api.tools.left
 import api.tools.such
+import org.jetbrains.annotations.TestOnly
 
 sealed interface KTTree
 sealed interface KTInnerTree : KTTree
@@ -38,7 +39,7 @@ sealed interface KTTopTree : KTInnerTree{
 }
 data class KTAnnotationTree(
     val name : String,
-    val args : List<String>,
+    val args : List<KTExpressionTree>,
 ) : KTInnerTree{
     override fun toString() : String =
         "@${name}(${args.joinToString()})"
@@ -107,8 +108,7 @@ data class KTFunctionTree(
         (receiver?.let { "$it." } ?: "") +
         name +
         "(${params.entries.joinToString(", ") { "${it.key}: ${it.value}" }})" +
-        " {\n$body\n}" +
-        "\n"
+        " $body\n"
 }
 sealed interface KTStatementTree : KTInnerTree
 sealed interface KTExpressionTree : KTStatementTree
@@ -171,12 +171,15 @@ data class KTFaceTree<T>(
 }
 data class KTInvokeTree(
     val name : KTExpressionTree,
-    val args : Map<String,KTExpressionTree>,
+    val args : Either<List<KTExpressionTree>,Map<String,KTExpressionTree>>,
 ) : KTExpressionTree{
     override fun toString() : String =
-        "$name(${args.entries.fold(""){
-            acc,(key,value)->"$acc$key = $value\n"
-        }})"
+        "$name(${args.such(List<KTExpressionTree>::joinToString){
+                it.entries.fold(""){
+                    acc,(key,value)->"$acc$key = $value,"
+                }
+            }
+        })"
 }
 data class KTNameTree(
     val chain : List<String>,

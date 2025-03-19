@@ -135,7 +135,7 @@ sealed interface ExprNode : StmtNode{
 data class AnnNode(
     override val node : ParserInfo,
     val name : NameNode,
-    val value : Either<ExprNode,NameNode>?
+    val value : Either<ExprNode,ID>?
 ) : InnerNode
 data class BlockNode(
     override val node : ParserInfo,

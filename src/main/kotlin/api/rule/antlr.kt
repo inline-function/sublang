@@ -20,6 +20,7 @@ import api.data.TopNode.CallableNode.FunctionNode
 import api.data.TopNode.CallableNode.VariableNode
 import api.data.TopNode.CallableNode.VariableNode.VariableNodeKind.*
 import api.data.TopNode.TraitNode
+import api.data.id
 import api.tools.*
 import org.antlr.v4.runtime.ANTLRInputStream
 import org.antlr.v4.runtime.CommonTokenStream
@@ -62,11 +63,8 @@ fun String. function( function: FunctionContext    ): FunctionNode          =Fun
 )
 fun String. ann     ( ann     : AnnotationContext  ): AnnNode               =AnnNode(
     node = info(ann),
-    name = name(ann.name(0)),
-    value = (ann.name().size >= 2).either(
-        left  = {expr(ann.expr())},
-        right = {name(ann.name(1))}
-    )
+    name = name(ann.name()),
+    value = ann.expr()?.let{expr(it)}?.left ?: ann.ID()?.text?.id?.right
 )
 fun String. block   ( block   : BlockContext       ): BlockNode             =BlockNode(
     node = info(block),

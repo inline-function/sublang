@@ -26,7 +26,7 @@ fragment HEX : [0-9a-fA-F] ;
 //语法
 root : topStmt+ EOF | EOF;
 name : ID ('.' ID)*;
-annotation : '@' name ('[' name ']'|'(' expr ')')?;
+annotation : '@' name ('[' ID ']'|'(' expr ')')?;
 stmt : topStmt | expr;
 topStmt : function | variable | trait ;
 parameter : annotation* (VAR|VAL|CONT)? ID ':' type ('=' expr)?;
