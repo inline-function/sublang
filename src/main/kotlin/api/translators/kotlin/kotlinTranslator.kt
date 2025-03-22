@@ -63,14 +63,14 @@ val ProjectTree.kotlinTree : KTProjectTree
     }
     on<TypeTree,KTTypeTree>{
         KTTypeTree(
-            name = name,
+            name = name.text,
             //TODO不支持泛型
             generic = listOf()
         )
     }
     on<AnnTree,KTAnnotationTree>{
         KTAnnotationTree(
-            name = name.china.first(),
+            name = name.text,
             args = value?.such(
                 left = {
                     listOf(KTFaceTree(it.toString()))

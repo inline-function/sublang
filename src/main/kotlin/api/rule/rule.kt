@@ -85,7 +85,7 @@ fun ProjectNode.check() = rule{
     }
     on<TypeNode,TypeTree>{
         TypeTree(
-            name = node.name,
+            name = node.name.id,
             info = infor,
             generic = node.generic.such(
                 left = {
@@ -127,7 +127,7 @@ fun ProjectNode.check() = rule{
     on<AnnNode,AnnTree>{
         AnnTree(
             info = infor,
-            name = node.name.task(),
+            name = node.name.task<NameNode,NameTree>().first().id,
             value = node.value?.map(
                 left = {it.task()},
                 right = {
@@ -202,7 +202,7 @@ fun ProjectNode.check() = rule{
                 emptyMap()
             },
             outsideLambda = node.outsideLambda?.task<_,LambdaTree>()?.some ?: None,
-            type = onlyFindSymbol<TraitTree>{ (invoker!!.not()).type.not().name == it.name.text }.such(
+            type = onlyFindSymbol<TraitTree>{ (invoker.not()).type.not().name.text == it.name.text }.such(
                 none = {error("没有在代码中找到该特质")},
                 some = {
                     //TODO调用表达式的类型

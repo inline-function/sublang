@@ -81,7 +81,7 @@ fun blocking(vararg stmts : StmtTree) = Block(stmts.toList())
 val String.id : ID get() = ID(this)
 data class AnnTree(
     override val info : CheckedInfo,
-    val name : NameTree,
+    val name : ID,
     val value : Either<FaceValueTree<Any>,NameTree>?
 ) : ITree
 sealed interface ExprTree : StmtTree{
@@ -111,7 +111,7 @@ sealed interface ExprTree : StmtTree{
         abstract val value : T
         override val type : Optional<TypeTree> get() = TypeTree(
             info = info,
-            name = typeName,
+            name = typeName.id,
             generic = mapOf()
         ).some
         data class DecValueTree(
@@ -178,6 +178,6 @@ sealed interface ExprTree : StmtTree{
 //类型并不是一等公民,而是等效替换成包含着类型信息的凝华类型对象常量名
 data class TypeTree(
     override val info : CheckedInfo,
-    val name : String,
+    val name : ID,
     val generic : Map<ID,TypeTree>
 ) : ITree
