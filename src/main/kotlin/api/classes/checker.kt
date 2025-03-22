@@ -39,6 +39,11 @@ class Checker(
         //错误级别内容
         val errors : List<Message> = listOf()
     ){
+        infix operator fun plus(other : Information) = Information(
+            tips = tips + other.tips,
+            warnings = warnings + other.warnings,
+            errors = errors + other.errors
+        )
         override fun toString() : String = StringBuilder().apply {
             {it:List<Message>,level:String ->
                 it.forEach {

@@ -1,6 +1,6 @@
-@file:Suppress("NestedLambdaShadowedImplicitParameter")
+@file:Suppress("NestedLambdaShadowedImplicitParameter","FunctionName")
 
-package api.translators.kotlin
+package api.translators.kotlin.apts
 
 import api.data.Block
 import api.data.ExprTree
@@ -8,37 +8,30 @@ import api.data.ExprTree.*
 import api.data.ExprTree.FaceValueTree.*
 import api.data.ExprTree.WhenTree.CaseTree.*
 import api.data.ID
-import api.data.ProjectTree
 import api.data.StmtTree
 import api.data.TopTree
 import api.data.TopTree.CallableTree.FunctionTree
 import api.data.TopTree.CallableTree.VariableTree
 import api.data.TopTree.TraitTree
 import api.data.id
-import api.tools.*
-sealed interface KotlinApt
-fun interface KTProjectApt : KotlinApt,(ProjectTree)->ProjectTree{
-    fun ProjectTree.map() : ProjectTree
-    override fun invoke(p1 : ProjectTree) = p1.map()
+import api.tools.apply
+import api.tools.let
+import api.tools.map
+import api.translators.kotlin.KTProjectApt
+fun IdMapClosure(idMap : MutableMap<ID,ID> = mutableMapOf()) = run {
+    var i = 1
+    {it:ID->
+        if (idMap.containsKey(it))
+            idMap[it]!!
+        else
+            "subid$${i++}".id.apply { idMap[it] = this }
+    }
 }
-fun interface KTFunctionApt : KotlinApt,(FunctionTree)->FunctionTree?{
-    fun FunctionTree.map() : FunctionTree?
-    override fun invoke(p1 : FunctionTree) = p1.map()
-}
-fun interface KTVariableApt : KotlinApt,(VariableTree)->VariableTree?{
-    fun VariableTree.map() : VariableTree?
-    override fun invoke(p1 : VariableTree) = p1.map()
-}
-fun interface KTTraitApt : KotlinApt,(TraitTree)->TraitTree?{
-    fun TraitTree.map() : TraitTree?
-    override fun invoke(p1 : TraitTree) = p1.map()
-}
-val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
-    val getMapId = getMapId.func
+fun ProjectIdProcessor(getMapId : (ID)->ID = IdMapClosure()) = KTProjectApt {
     lateinit var processExprId : (ExprTree)->ExprTree
     lateinit var processTopId : (TopTree)->TopTree
     lateinit var processStmtId : (StmtTree)->StmtTree
-    val processLambdaId = {it:LambdaTree->
+    val processLambdaId = {it: LambdaTree ->
         it.copy(
             params = it.params.map {
                 it.copy(
@@ -55,7 +48,7 @@ val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
     }
     processStmtId = {
         when(it){
-            is ExprTree-> processExprId(it)
+            is ExprTree -> processExprId(it)
             is TopTree -> processTopId(it)
         }
     }
@@ -66,7 +59,7 @@ val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
             is IfTree -> it.copy(
                 condition = it.condition.map { processExprId(it) },
                 then = Block(it.then.map { processStmtId(it) }),
-                `else` = it.`else`?.map { processStmtId(it) }?.let{Block(it)}
+                `else` = it.`else`?.map { processStmtId(it) }?.let{ Block(it) }
             )
             is InvokeTree -> it.copy(
                 invoker = it.invoker.map { processExprId(it) },
@@ -113,7 +106,7 @@ val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
             )
         }
     }
-    val processVariableId = {it:VariableTree->
+    val processVariableId = {it: VariableTree ->
         it.copy(
             name = getMapId(it.name),
             type = it.type.map { it.copy(name = getMapId(it.name)) },
@@ -121,7 +114,7 @@ val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
             value = it.value.map { processExprId(it) }
         )
     }
-    val processFunctionId = {it:FunctionTree->
+    val processFunctionId = {it: FunctionTree ->
         it.copy(
             name = getMapId(it.name),
             params = it.params.map { processVariableId(it) },
@@ -136,7 +129,7 @@ val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
             }
         )
     }
-    val processTraitId = {it:TraitTree->
+    val processTraitId = {it: TraitTree ->
         it.copy(
             name = getMapId(it.name),
             members = it.members.map {
@@ -147,16 +140,16 @@ val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
             },
             parent = it.parent?.copy(name = getMapId(it.parent.name))
         )
-     }
+    }
     processTopId = {
         when(it){
             is FunctionTree -> processFunctionId(it)
             is VariableTree -> processVariableId(it)
-            is TraitTree    -> processTraitId(it)
+            is TraitTree -> processTraitId(it)
         }
     }
-    it.copy(
-        children = it.children.map {
+    copy(
+        children = children.map {
             it.copy(
                 children = it.children.map {
                     processTopId(it)
@@ -164,35 +157,4 @@ val idMapProcess = io2{getMapId:IO1<ID,ID>,it:ProjectTree->
             )
         }
     )
-}
-@Suppress("NOTHING_TO_INLINE")
-inline fun ProjectTree.toKotlinTree(vararg apts : KotlinApt) = toKotlinTree(apts.toList())
-tailrec fun ProjectTree.toKotlinTree(
-    apts : List<KotlinApt> = emptyList()
-) : ProjectTree{
-    if (apts.isEmpty()) return this
-    val copyProjectOnlyByTopTreeApt : ProjectTree.((TopTree)->TopTree?)->ProjectTree = {
-        copy(
-            children = children.map {
-                it.copy(
-                    children = it.children.mapNotNull {
-                        it(it)
-                    }
-                )
-            }
-        )
-    }
-   val resultTree = when(val apt = apts.first()){
-        is KTFunctionApt -> copyProjectOnlyByTopTreeApt {
-            if (it is FunctionTree) apt(it) else it
-        }
-        is KTTraitApt -> copyProjectOnlyByTopTreeApt {
-            if (it is TraitTree) apt(it) else it
-        }
-        is KTVariableApt -> copyProjectOnlyByTopTreeApt {
-            if (it is VariableTree) apt(it) else it
-        }
-        is KTProjectApt -> apt(this)
-    }
-    return resultTree.toKotlinTree(apts.drop(1))
 }
